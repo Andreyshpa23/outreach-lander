@@ -904,14 +904,15 @@ export default function Page() {
             }}
           />
 
-          <div className="mt-2 flex items-center justify-between">
-            <button
+          <div className="mt-4 flex items-center justify-between gap-4">
+            <Button
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading}
-              className="text-sm text-zinc-500 hover:text-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              variant="outline"
+              className="rounded-lg px-4 py-2 border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
             >
               {isUploading ? (
-                <span className="flex items-center gap-1.5">
+                <span className="flex items-center gap-2">
                   <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
@@ -920,21 +921,19 @@ export default function Page() {
               ) : (
                 "Attach"
               )}
-            </button>
-            <div className="text-xs text-zinc-500">
-              Powered by SalesTrigger AI
-            </div>
-            </div>
-
-          <div className="mt-3 flex items-center justify-end">
+            </Button>
             <Button
               size="lg"
-              className="rounded-xl px-6"
+              className="rounded-xl px-6 bg-zinc-900 text-white hover:bg-zinc-800 font-medium"
               onClick={() => checkAndAskQuestions()}
               disabled={(!input.trim() && uploadedFiles.length === 0) || loading || askingQuestions}
             >
               Launch AI Sales Agent
             </Button>
+            </div>
+
+          <div className="mt-3 text-xs text-zinc-500 text-center">
+            Powered by SalesTrigger AI
           </div>
         </div>
       </section>
