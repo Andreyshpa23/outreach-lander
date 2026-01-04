@@ -6,8 +6,8 @@ import { existsSync } from "fs";
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-// Maximum file size: 10MB
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
+// Maximum file size: 50MB
+const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
 // Allowed file types
 const ALLOWED_TYPES = [
