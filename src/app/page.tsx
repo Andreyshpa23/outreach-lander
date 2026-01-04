@@ -829,7 +829,27 @@ export default function Page() {
 
             {/* Input */}
             <section className="mt-12 w-full max-w-3xl">
-        <div className="w-full rounded-xl border border-zinc-200 bg-white/75 p-4 shadow-xl backdrop-blur-md">
+        <div 
+          ref={dropZoneRef}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={`w-full rounded-xl border border-zinc-200 bg-white/75 p-4 shadow-xl backdrop-blur-md relative transition-all ${
+            isDragging ? 'border-blue-400 bg-blue-50/50 ring-2 ring-blue-300' : ''
+          }`}
+        >
+          {/* Drag Overlay */}
+          {isDragging && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-blue-500/10 backdrop-blur-sm">
+              <div className="text-center">
+                <svg className="mx-auto h-12 w-12 text-blue-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                <p className="text-sm font-medium text-blue-600">Drop files here to upload</p>
+              </div>
+            </div>
+          )}
+
           {/* Uploaded Files Preview */}
           {uploadedFiles.length > 0 && (
             <div className="mb-3 flex flex-wrap gap-2">
@@ -857,61 +877,28 @@ export default function Page() {
             </div>
           )}
 
-          <div className="flex items-start gap-3">
-            {/* File Upload Button */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,.pptx,.docx,.doc,.ppt,.txt"
-              className="hidden"
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-
-                setIsUploading(true);
-                try {
-                  const formData = new FormData();
-                  formData.append('file', file);
-
-                  const res = await fetch('/api/upload-file', {
-                    method: 'POST',
-                    headers: {
-                      'x-session-id': sessionId || ''
-                    },
-                    body: formData
-                  });
-
-                  if (!res.ok) {
-                    const error = await res.json();
-                    throw new Error(error.error || 'Failed to upload file');
-                  }
-
-                  const data = await res.json();
-                  setUploadedFiles(prev => [...prev, {
-                    name: data.originalName,
-                    type: data.type,
-                    size: data.size
-                  }]);
-
-                  // Add file info to input
-                  const fileInfo = `\n[Attached file: ${data.originalName} (${(data.size / 1024).toFixed(1)}KB)]`;
-                  setInput(prev => prev + fileInfo);
-                } catch (error: any) {
-                  alert(`Failed to upload file: ${error.message}`);
-                } finally {
-                  setIsUploading(false);
-                  if (fileInputRef.current) {
-                    fileInputRef.current.value = '';
+          <div className="relative">
+          <Textarea
+            rows={4}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  if ((input.trim() || uploadedFiles.length > 0) && !loading && !askingQuestions) {
+                    checkAndAskQuestions();
                   }
                 }
               }}
+              placeholder="What are you selling? (or upload a pitch deck, presentation, etc.)"
+              className="resize-none border-zinc-200 bg-white/70 text-base focus-visible:ring-0 pr-12"
             />
-
+            {/* File Upload Button - Bottom Right */}
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading}
-              className="mt-2 flex-shrink-0 rounded-lg border border-zinc-300 bg-white p-2.5 text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              title="Upload file (PDF, PPTX, DOCX, etc.)"
+              className="absolute bottom-3 right-3 rounded-lg p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              title="Attach file (PDF, PPTX, DOCX, etc.)"
             >
               {isUploading ? (
                 <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -923,28 +910,22 @@ export default function Page() {
                 </svg>
               )}
             </button>
-
-            <div className="flex-1">
-          <Textarea
-            rows={4}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    if ((input.trim() || uploadedFiles.length > 0) && !loading && !askingQuestions) {
-                      checkAndAskQuestions();
-                    }
-                  }
-                }}
-                placeholder="What are you selling? (or upload a pitch deck, presentation, etc.)"
-            className="resize-none border-zinc-200 bg-white/70 text-base focus-visible:ring-0"
-          />
-            </div>
           </div>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.pptx,.docx,.doc,.ppt,.txt"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleFileUpload(file);
+            }}
+          />
+
           <div className="mt-3 flex items-center justify-between">
             <div className="text-xs text-zinc-500">
-                    Powered by SalesTrigger AI • Upload PDF, PPTX, DOCX, or TXT files
+                    Powered by SalesTrigger AI
             </div>
             <Button
               size="lg"
