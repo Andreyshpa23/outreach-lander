@@ -40,6 +40,9 @@ export default function Page() {
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authAgreed, setAuthAgreed] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState<Array<{name: string, type: string, size: number}>>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const chatMessagesEndRef = useRef<HTMLDivElement>(null);
 
   // Cookie helpers
@@ -170,10 +173,17 @@ export default function Page() {
     setCurrentQuestionIndex(0);
     setAnswers({});
     
+    // Include uploaded files info in initial message
+    let initialMessage = input;
+    if (uploadedFiles.length > 0) {
+      const filesInfo = uploadedFiles.map(f => `${f.name} (${(f.size / 1024).toFixed(1)}KB)`).join(', ');
+      initialMessage = `${input}\n\n[Uploaded files: ${filesInfo}]`.trim();
+    }
+    
     // Add user's initial input as first message in chat
     setChatMessages([{
       role: 'user',
-      text: input
+      text: initialMessage
     }]);
     setCurrentAnswer("");
 
@@ -187,14 +197,25 @@ export default function Page() {
       const agentMessages = chatMessages.filter(msg => msg.role === 'agent');
       const askedQuestions = agentMessages.map(msg => msg.text);
       
+      // Include uploaded files info in input
+      let finalInput = input;
+      if (uploadedFiles.length > 0) {
+        const filesInfo = uploadedFiles.map(f => `${f.name} (${(f.size / 1024).toFixed(1)}KB)`).join(', ');
+        finalInput = `${input}\n\n[Uploaded files: ${filesInfo}]`.trim();
+      }
+      
       const res = await fetch("/api/collect-info", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "x-session-id": sessionId || ""
+        },
         body: JSON.stringify({ 
-          input: input,
+          input: finalInput,
           answers: answers,
           askedQuestions: askedQuestions, // Pass already asked questions
-          chatHistory: chatMessages // Pass full chat history for context
+          chatHistory: chatMessages, // Pass full chat history for context
+          uploadedFiles: uploadedFiles.map(f => ({ name: f.name, type: f.type, size: f.size }))
         }),
       });
 
@@ -348,6 +369,13 @@ export default function Page() {
   }
 
   async function startGeneration() {
+    // Include uploaded files info in input
+    let finalInput = input;
+    if (uploadedFiles.length > 0) {
+      const filesInfo = uploadedFiles.map(f => `${f.name} (${(f.size / 1024).toFixed(1)}KB)`).join(', ');
+      finalInput = `${input}\n\n[Uploaded files: ${filesInfo}]`.trim();
+    }
+
     // For URLs, we can skip information collection and go directly to generation
     // But we still need to collect info first to extract UTPs and metrics
     if (isUrl(input)) {
@@ -833,27 +861,144 @@ export default function Page() {
 
                 {/* Input Area - Fixed at bottom */}
                 <div className="border-t border-zinc-200 bg-white/95 p-4">
+                  {/* Uploaded Files Preview */}
+                  {uploadedFiles.length > 0 && (
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {uploadedFiles.map((file, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-1.5 text-sm text-blue-700"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                          </svg>
+                          <span className="max-w-[150px] truncate">{file.name}</span>
+                          <button
+                            onClick={() => {
+                              setUploadedFiles(prev => prev.filter((_, i) => i !== idx));
+                            }}
+                            className="text-blue-500 hover:text-blue-700"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   <div className="flex items-end gap-3">
+                    {/* File Upload Button */}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.pptx,.docx,.doc,.ppt,.txt"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+
+                        setIsUploading(true);
+                        try {
+                          const formData = new FormData();
+                          formData.append('file', file);
+
+                          const res = await fetch('/api/upload-file', {
+                            method: 'POST',
+                            headers: {
+                              'x-session-id': sessionId || ''
+                            },
+                            body: formData
+                          });
+
+                          if (!res.ok) {
+                            const error = await res.json();
+                            throw new Error(error.error || 'Failed to upload file');
+                          }
+
+                          const data = await res.json();
+                          setUploadedFiles(prev => [...prev, {
+                            name: data.originalName,
+                            type: data.type,
+                            size: data.size
+                          }]);
+
+                          // Add file info to current answer or input
+                          const fileInfo = `\n[Attached file: ${data.originalName} (${(data.size / 1024).toFixed(1)}KB)]`;
+                          if (chatMessages.length === 0) {
+                            setInput(prev => prev + fileInfo);
+                          } else {
+                            setCurrentAnswer(prev => prev + fileInfo);
+                          }
+                        } catch (error: any) {
+                          alert(`Failed to upload file: ${error.message}`);
+                        } finally {
+                          setIsUploading(false);
+                          if (fileInputRef.current) {
+                            fileInputRef.current.value = '';
+                          }
+                        }
+                      }}
+                    />
+
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploading}
+                      className="flex-shrink-0 rounded-lg border border-zinc-300 bg-white p-2.5 text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      title="Upload file (PDF, PPTX, DOCX, etc.)"
+                    >
+                      {isUploading ? (
+                        <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                      ) : (
+                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.414a2 2 0 000-2.828l-6.414-6.414a2 2 0 10-2.828 2.828L15.172 7z" />
+                        </svg>
+                      )}
+                    </button>
+
                     <div className="flex-1">
                       <Textarea
                         rows={2}
-                        value={currentAnswer}
-                        onChange={(e) => setCurrentAnswer(e.target.value)}
+                        value={chatMessages.length === 0 ? input : currentAnswer}
+                        onChange={(e) => {
+                          if (chatMessages.length === 0) {
+                            setInput(e.target.value);
+                          } else {
+                            setCurrentAnswer(e.target.value);
+                          }
+                        }}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" && !e.shiftKey) {
                             e.preventDefault();
-                            if (currentAnswer.trim()) {
-                              handleAnswerSubmit();
+                            if (chatMessages.length === 0) {
+                              if (input.trim() || uploadedFiles.length > 0) {
+                                startGeneration();
+                              }
+                            } else {
+                              if (currentAnswer.trim()) {
+                                handleAnswerSubmit();
+                              }
                             }
                           }
                         }}
-                        placeholder={chatMessages.length === 0 ? "What are you selling?" : "Type your answer here..."}
+                        placeholder={chatMessages.length === 0 ? "What are you selling? (or upload a pitch deck, presentation, etc.)" : "Type your answer here..."}
                         className="resize-none border-zinc-200 bg-white text-base focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
                       />
                     </div>
             <Button
-                      onClick={handleAnswerSubmit}
-                      disabled={!currentAnswer.trim()}
+                      onClick={() => {
+                        if (chatMessages.length === 0) {
+                          if (input.trim() || uploadedFiles.length > 0) {
+                            startGeneration();
+                          }
+                        } else {
+                          handleAnswerSubmit();
+                        }
+                      }}
+                      disabled={chatMessages.length === 0 ? (!input.trim() && uploadedFiles.length === 0) : !currentAnswer.trim()}
                       className="rounded-lg px-6 h-auto py-2.5"
               size="lg"
             >
@@ -861,7 +1006,7 @@ export default function Page() {
             </Button>
                   </div>
                   <div className="mt-2 text-xs text-zinc-400 text-center">
-                    Powered by SalesTrigger AI
+                    Powered by SalesTrigger AI • Upload PDF, PPTX, DOCX, or TXT files
                   </div>
           </div>
         </div>
