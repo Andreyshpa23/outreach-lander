@@ -42,8 +42,10 @@ export default function Page() {
   const [authAgreed, setAuthAgreed] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<Array<{name: string, type: string, size: number}>>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatMessagesEndRef = useRef<HTMLDivElement>(null);
+  const dropZoneRef = useRef<HTMLDivElement>(null);
 
   // Cookie helpers
   function getCookie(name: string): string | null {
@@ -160,6 +162,81 @@ export default function Page() {
   );
 
   const messageLabels = ["Opening message", "Follow-up #1", "Follow-up #2", "Break-up follow-up"];
+
+  /* ===================== FILE UPLOAD ===================== */
+
+  async function handleFileUpload(file: File) {
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/upload-file', {
+        method: 'POST',
+        headers: {
+          'x-session-id': sessionId || ''
+        },
+        body: formData
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Failed to upload file');
+      }
+
+      const data = await res.json();
+      setUploadedFiles(prev => [...prev, {
+        name: data.originalName,
+        type: data.type,
+        size: data.size
+      }]);
+
+      // Add file info to input
+      const fileInfo = `\n[Attached file: ${data.originalName} (${(data.size / 1024).toFixed(1)}KB)]`;
+      if (chatMessages.length === 0) {
+        setInput(prev => prev + fileInfo);
+      } else {
+        setCurrentAnswer(prev => prev + fileInfo);
+      }
+    } catch (error: any) {
+      alert(`Failed to upload file: ${error.message}`);
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const files = Array.from(e.dataTransfer.files);
+    const allowedTypes = ['.pdf', '.pptx', '.docx', '.doc', '.ppt', '.txt'];
+    
+    files.forEach(file => {
+      const extension = '.' + file.name.split('.').pop()?.toLowerCase();
+      if (allowedTypes.includes(extension)) {
+        handleFileUpload(file);
+      } else {
+        alert(`File type ${extension} is not supported. Please upload PDF, PPTX, DOCX, DOC, PPT, or TXT files.`);
+      }
+    });
+  }
 
   /* ===================== GENERATE ===================== */
 
@@ -848,10 +925,10 @@ export default function Page() {
             </button>
 
             <div className="flex-1">
-              <Textarea
-                rows={4}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
+          <Textarea
+            rows={4}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
@@ -861,8 +938,8 @@ export default function Page() {
                   }
                 }}
                 placeholder="What are you selling? (or upload a pitch deck, presentation, etc.)"
-                className="resize-none border-zinc-200 bg-white/70 text-base focus-visible:ring-0"
-              />
+            className="resize-none border-zinc-200 bg-white/70 text-base focus-visible:ring-0"
+          />
             </div>
           </div>
           <div className="mt-3 flex items-center justify-between">
@@ -904,7 +981,15 @@ export default function Page() {
 
             {/* Chat with questions - ChatGPT-style dialog */}
             <section className="mt-8 w-full max-w-3xl">
-              <div className="w-full rounded-xl border border-zinc-200 bg-white/90 shadow-xl backdrop-blur-md overflow-hidden flex flex-col" style={{ maxHeight: '600px' }}>
+              <div 
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`w-full rounded-xl border border-zinc-200 bg-white/90 shadow-xl backdrop-blur-md overflow-hidden flex flex-col transition-all ${
+                  isDragging ? 'border-blue-400 bg-blue-50/50 ring-2 ring-blue-300' : ''
+                }`}
+                style={{ maxHeight: '600px' }}
+              >
                 {/* Chat Messages Container - Full history visible */}
                 <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4 min-h-[300px]">
                   {chatMessages.length === 0 ? (
