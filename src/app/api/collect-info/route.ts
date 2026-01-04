@@ -1,9 +1,22 @@
 import { NextResponse } from "next/server";
+import { checkTokenLimit, incrementUsage } from "@/lib/token-limiter";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
+    // Check token limit before processing
+    const limitCheck = checkTokenLimit();
+    if (!limitCheck.allowed) {
+      return NextResponse.json(
+        { 
+          error: limitCheck.message || "Daily limit reached. Please try again tomorrow.",
+          limitReached: true
+        },
+        { status: 429 }
+      );
+    }
+
     const { input, answers, askedQuestions = [], chatHistory = [] } = await req.json();
 
     if (!input || input.length < 3) {
@@ -277,6 +290,9 @@ RULES FOR GENERATING CONTEXTUAL QUESTIONS
       console.error("Raw response:", result);
       throw new Error("Failed to parse API response as JSON. The model may have returned invalid JSON.");
     }
+
+    // Increment usage counter (estimate ~1000 tokens per info collection request)
+    incrementUsage(1000);
 
     return NextResponse.json({ result: parsed });
   } catch (e: any) {

@@ -91,6 +91,12 @@ export default function Page() {
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        
+        // Check if it's a rate limit error
+        if (res.status === 429 || errorData.limitReached) {
+          throw new Error("Daily limit reached. Please try again tomorrow.");
+        }
+        
         throw new Error(errorData.error || `API error: ${res.status} ${res.statusText}`);
       }
 
@@ -292,6 +298,12 @@ export default function Page() {
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        
+        // Check if it's a rate limit error
+        if (res.status === 429 || errorData.limitReached) {
+          throw new Error("Daily limit reached. Please try again tomorrow.");
+        }
+        
         throw new Error(errorData.error || `API error: ${res.status} ${res.statusText}`);
       }
 

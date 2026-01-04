@@ -1,9 +1,22 @@
 import { NextResponse } from "next/server";
+import { checkTokenLimit, incrementUsage } from "@/lib/token-limiter";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
+    // Check token limit before processing
+    const limitCheck = checkTokenLimit();
+    if (!limitCheck.allowed) {
+      return NextResponse.json(
+        { 
+          error: limitCheck.message || "Daily limit reached. Please try again tomorrow.",
+          limitReached: true
+        },
+        { status: 429 }
+      );
+    }
+
     const { input, product_utps = [], product_metrics = [], case_studies = [] } = await req.json();
 
     if (!input || input.length < 10) {
@@ -257,6 +270,9 @@ OUTPUT FORMAT (STRICT)
       .replace(/```json/g, "")
       .replace(/```/g, "")
       .trim();
+
+    // Increment usage counter (estimate ~2000 tokens per generation request)
+    incrementUsage(2000);
 
     return NextResponse.json({ result: cleaned });
 
