@@ -1052,76 +1052,6 @@ export default function Page() {
                   )}
 
                   <div className="flex items-end gap-3">
-                    {/* File Upload Button */}
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".pdf,.pptx,.docx,.doc,.ppt,.txt"
-                      className="hidden"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-
-                        setIsUploading(true);
-                        try {
-                          const formData = new FormData();
-                          formData.append('file', file);
-
-                          const res = await fetch('/api/upload-file', {
-                            method: 'POST',
-                            headers: {
-                              'x-session-id': sessionId || ''
-                            },
-                            body: formData
-                          });
-
-                          if (!res.ok) {
-                            const error = await res.json();
-                            throw new Error(error.error || 'Failed to upload file');
-                          }
-
-                          const data = await res.json();
-                          setUploadedFiles(prev => [...prev, {
-                            name: data.originalName,
-                            type: data.type,
-                            size: data.size
-                          }]);
-
-                          // Add file info to current answer or input
-                          const fileInfo = `\n[Attached file: ${data.originalName} (${(data.size / 1024).toFixed(1)}KB)]`;
-                          if (chatMessages.length === 0) {
-                            setInput(prev => prev + fileInfo);
-                          } else {
-                            setCurrentAnswer(prev => prev + fileInfo);
-                          }
-                        } catch (error: any) {
-                          alert(`Failed to upload file: ${error.message}`);
-                        } finally {
-                          setIsUploading(false);
-                          if (fileInputRef.current) {
-                            fileInputRef.current.value = '';
-                          }
-                        }
-                      }}
-                    />
-
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={isUploading}
-                      className="flex-shrink-0 rounded-lg border border-zinc-300 bg-white p-2.5 text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      title="Upload file (PDF, PPTX, DOCX, etc.)"
-                    >
-                      {isUploading ? (
-                        <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                      ) : (
-                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.414a2 2 0 000-2.828l-6.414-6.414a2 2 0 10-2.828 2.828L15.172 7z" />
-                        </svg>
-                      )}
-                    </button>
-
                     <div className="flex-1">
                       <Textarea
                         rows={2}
@@ -1168,8 +1098,38 @@ export default function Page() {
                       {chatMessages.length === 0 ? "Launch" : "Send"}
             </Button>
                   </div>
-                  <div className="mt-2 text-xs text-zinc-400 text-center">
-                    Powered by SalesTrigger AI • Upload PDF, PPTX, DOCX, or TXT files
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.pptx,.docx,.doc,.ppt,.txt"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleFileUpload(file);
+                    }}
+                  />
+
+                  <div className="mt-2 flex items-center justify-between">
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploading}
+                      className="text-sm text-zinc-500 hover:text-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {isUploading ? (
+                        <span className="flex items-center gap-1.5">
+                          <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                          Uploading...
+                        </span>
+                      ) : (
+                        "Attach"
+                      )}
+                    </button>
+                    <div className="text-xs text-zinc-400 text-center">
+                      Powered by SalesTrigger AI
+                    </div>
                   </div>
           </div>
         </div>
