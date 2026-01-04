@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { checkTokenLimit, incrementUsage } from "@/lib/token-limiter";
+import { addRequest } from "@/lib/session-storage";
 
 export const runtime = "nodejs";
 
@@ -16,6 +17,10 @@ export async function POST(req: Request) {
         { status: 429 }
       );
     }
+
+    const sessionId = req.headers.get('x-session-id') || 'unknown';
+    const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+    const userAgent = req.headers.get('user-agent') || 'unknown';
 
     const { input, answers, askedQuestions = [], chatHistory = [] } = await req.json();
 
@@ -293,6 +298,25 @@ RULES FOR GENERATING CONTEXTUAL QUESTIONS
 
     // Increment usage counter (estimate ~1000 tokens per info collection request)
     incrementUsage(1000);
+
+    // Log request to session
+    if (sessionId && sessionId !== 'unknown') {
+      try {
+        addRequest(sessionId, {
+          timestamp: new Date().toISOString(),
+          type: 'collect-info',
+          input: input,
+          result: parsed,
+          productInsights: parsed.has_enough_info ? {
+            utps: parsed.product_utps || [],
+            metrics: parsed.product_metrics || [],
+            caseStudies: parsed.case_studies || []
+          } : undefined
+        });
+      } catch (err) {
+        console.error('Error logging request:', err);
+      }
+    }
 
     return NextResponse.json({ result: parsed });
   } catch (e: any) {

@@ -35,7 +35,112 @@ export default function Page() {
   const [chatMessages, setChatMessages] = useState<Array<{role: 'agent' | 'user', text: string}>>([]);
   const [currentAnswer, setCurrentAnswer] = useState("");
   const [needsMoreInfo, setNeedsMoreInfo] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const chatMessagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Cookie helpers
+  function getCookie(name: string): string | null {
+    if (typeof document === 'undefined') return null;
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop()?.split(';').shift() || null;
+    return null;
+  }
+
+  function setCookie(name: string, value: string, days: number = 365) {
+    if (typeof document === 'undefined') return;
+    const expires = new Date();
+    expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000);
+    document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/`;
+  }
+
+  // Initialize session on mount
+  useEffect(() => {
+    async function initSession() {
+      try {
+        // Check if we have sessionId in cookies
+        let currentSessionId = getCookie('st_session_id');
+        
+        if (!currentSessionId) {
+          // Get or create session from API
+          const res = await fetch('/api/session', {
+            method: 'GET',
+            headers: {
+              'x-session-id': ''
+            }
+          });
+          
+          if (res.ok) {
+            const data = await res.json();
+            currentSessionId = data.sessionId;
+            if (currentSessionId) {
+              setCookie('st_session_id', currentSessionId);
+              setSessionId(currentSessionId);
+            }
+            
+            // Load saved results if available
+            if (data.lastResult) {
+              // Restore state from saved result
+              setApiData(data.lastResult.apiData);
+              setProductUTPs(data.lastResult.productUTPs || []);
+              setProductMetrics(data.lastResult.productMetrics || []);
+              
+              // Restore results to cookies for quick access
+              setCookie('st_last_result', JSON.stringify(data.lastResult), 7);
+              
+              // If we have saved data, show it
+              if (data.lastResult.apiData) {
+                setStep(4);
+              }
+            }
+          }
+        } else {
+          setSessionId(currentSessionId);
+          
+          // Try to load from cookies first (faster)
+          const savedResult = getCookie('st_last_result');
+          if (savedResult) {
+            try {
+              const parsed = JSON.parse(savedResult);
+              setApiData(parsed.apiData);
+              setProductUTPs(parsed.productUTPs || []);
+              setProductMetrics(parsed.productMetrics || []);
+              if (parsed.apiData) {
+                setStep(4);
+              }
+            } catch (e) {
+              console.error('Error parsing saved result:', e);
+            }
+          }
+          
+          // Also fetch from API to get latest
+          const res = await fetch('/api/session', {
+            method: 'GET',
+            headers: {
+              'x-session-id': currentSessionId
+            }
+          });
+          
+          if (res.ok) {
+            const data = await res.json();
+            if (data.lastResult && !savedResult) {
+              setApiData(data.lastResult.apiData);
+              setProductUTPs(data.lastResult.productUTPs || []);
+              setProductMetrics(data.lastResult.productMetrics || []);
+              setCookie('st_last_result', JSON.stringify(data.lastResult), 7);
+              if (data.lastResult.apiData) {
+                setStep(4);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error initializing session:', error);
+      }
+    }
+    
+    initSession();
+  }, []);
 
   const steps = useMemo(
     () => [
@@ -292,7 +397,10 @@ export default function Page() {
 
       const res = await fetch("/api/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "x-session-id": sessionId || ""
+        },
         body: JSON.stringify(requestBody),
       });
 
@@ -337,6 +445,34 @@ export default function Page() {
     }
     if (parsed.product_metrics && Array.isArray(parsed.product_metrics) && parsed.product_metrics.length > 0) {
       setProductMetrics(parsed.product_metrics);
+    }
+
+    // Save results to session and cookies
+    if (sessionId) {
+      const resultToSave = {
+        apiData: parsed,
+        productUTPs: productUTPs.length > 0 ? productUTPs : (parsed.product_utps || []),
+        productMetrics: productMetrics.length > 0 ? productMetrics : (parsed.product_metrics || []),
+        timestamp: new Date().toISOString()
+      };
+      
+      // Save to cookies (quick access)
+      setCookie('st_last_result', JSON.stringify(resultToSave), 7);
+      
+      // Save to session (server-side)
+      fetch('/api/session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-session-id': sessionId
+        },
+        body: JSON.stringify({
+          sessionId,
+          result: parsed,
+          productUTPs: resultToSave.productUTPs,
+          productMetrics: resultToSave.productMetrics
+        })
+      }).catch(err => console.error('Error saving session:', err));
     }
     setTyped(
       parsed.segments.map(() => ({

@@ -35,6 +35,7 @@ yarn-error.log*
 
 # token usage tracking
 .token-usage.json
+.sessions/
 
 # vercel
 .vercel

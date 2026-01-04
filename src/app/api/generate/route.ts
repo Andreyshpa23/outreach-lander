@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { checkTokenLimit, incrementUsage } from "@/lib/token-limiter";
+import { addRequest } from "@/lib/session-storage";
 
 export const runtime = "nodejs";
 
@@ -16,6 +17,10 @@ export async function POST(req: Request) {
         { status: 429 }
       );
     }
+
+    const sessionId = req.headers.get('x-session-id') || 'unknown';
+    const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+    const userAgent = req.headers.get('user-agent') || 'unknown';
 
     const { input, product_utps = [], product_metrics = [], case_studies = [] } = await req.json();
 
@@ -273,6 +278,32 @@ OUTPUT FORMAT (STRICT)
 
     // Increment usage counter (estimate ~2000 tokens per generation request)
     incrementUsage(2000);
+
+    // Log request to session
+    if (sessionId && sessionId !== 'unknown') {
+      try {
+        let parsedResult;
+        try {
+          parsedResult = JSON.parse(cleaned);
+        } catch (e) {
+          parsedResult = cleaned;
+        }
+        
+        addRequest(sessionId, {
+          timestamp: new Date().toISOString(),
+          type: 'generate',
+          input: input,
+          result: parsedResult,
+          productInsights: {
+            utps: product_utps,
+            metrics: product_metrics,
+            caseStudies: case_studies
+          }
+        });
+      } catch (err) {
+        console.error('Error logging request:', err);
+      }
+    }
 
     return NextResponse.json({ result: cleaned });
 
