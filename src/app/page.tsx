@@ -877,40 +877,21 @@ export default function Page() {
             </div>
           )}
 
-          <div className="relative">
           <Textarea
             rows={4}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  if ((input.trim() || uploadedFiles.length > 0) && !loading && !askingQuestions) {
-                    checkAndAskQuestions();
-                  }
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                if ((input.trim() || uploadedFiles.length > 0) && !loading && !askingQuestions) {
+                  checkAndAskQuestions();
                 }
-              }}
-              placeholder="What are you selling? (or upload a pitch deck, presentation, etc.)"
-              className="resize-none border-zinc-200 bg-white/70 text-base focus-visible:ring-0 pr-12"
-            />
-            {/* File Upload Button - Bottom Right */}
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading}
-              className="absolute bottom-3 right-3 rounded-lg p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              title="Attach file (PDF, PPTX, DOCX, etc.)"
-            >
-              {isUploading ? (
-                <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-              ) : (
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.414a2 2 0 000-2.828l-6.414-6.414a2 2 0 10-2.828 2.828L15.172 7z" />
-                </svg>
-              )}
-            </button>
-          </div>
+              }
+            }}
+            placeholder="What are you selling? (or upload a pitch deck, presentation, etc.)"
+            className="resize-none border-zinc-200 bg-white/70 text-base focus-visible:ring-0"
+          />
 
           <input
             ref={fileInputRef}
@@ -923,17 +904,36 @@ export default function Page() {
             }}
           />
 
-          <div className="mt-3 flex items-center justify-between">
+          <div className="mt-2 flex items-center justify-between">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              className="text-sm text-zinc-500 hover:text-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {isUploading ? (
+                <span className="flex items-center gap-1.5">
+                  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Uploading...
+                </span>
+              ) : (
+                "Attach"
+              )}
+            </button>
             <div className="text-xs text-zinc-500">
-                    Powered by SalesTrigger AI
+              Powered by SalesTrigger AI
             </div>
+            </div>
+
+          <div className="mt-3 flex items-center justify-end">
             <Button
               size="lg"
               className="rounded-xl px-6"
               onClick={() => checkAndAskQuestions()}
               disabled={(!input.trim() && uploadedFiles.length === 0) || loading || askingQuestions}
             >
-                    Launch AI Sales Agent
+              Launch AI Sales Agent
             </Button>
           </div>
         </div>
