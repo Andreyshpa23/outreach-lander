@@ -180,8 +180,22 @@ export default function Page() {
       });
 
       if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || 'Failed to upload file');
+        // Try to parse JSON error, fallback to text
+        let errorMessage = 'Failed to upload file';
+        try {
+          const errorData = await res.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          // If JSON parsing fails, try to get text
+          try {
+            const errorText = await res.text();
+            errorMessage = errorText || errorMessage;
+          } catch (e2) {
+            // If both fail, use status text
+            errorMessage = res.statusText || errorMessage;
+          }
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await res.json();
