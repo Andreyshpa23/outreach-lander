@@ -168,11 +168,11 @@ export default function Page() {
   const messageLabels = ["Opening message", "Follow-up #1", "Follow-up #2", "Break-up follow-up"];
 
   // Placeholder rotation animation
-  const placeholders = [
+  const placeholders = useMemo(() => [
     "Built something but don't know how to get users?",
     "Drop your idea. Let AI handle sales.",
     "What would you sell if sales wasn't annoying?"
-  ];
+  ], []);
 
   useEffect(() => {
     // Only animate placeholder when input is empty and user is not focused on textarea
