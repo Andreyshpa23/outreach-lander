@@ -167,6 +167,53 @@ export default function Page() {
 
   const messageLabels = ["Opening message", "Follow-up #1", "Follow-up #2", "Break-up follow-up"];
 
+  // Placeholder rotation animation
+  const placeholders = [
+    "Built something but don't know how to get users?",
+    "Drop your idea. Let AI handle sales.",
+    "What would you sell if sales wasn't annoying?"
+  ];
+
+  useEffect(() => {
+    // Only animate placeholder when input is empty and user is not focused on textarea
+    if (step !== 0 || input.trim() !== "") {
+      return;
+    }
+
+    const currentPlaceholder = placeholders[placeholderIndex];
+    
+    if (isTyping) {
+      // Typing animation
+      if (placeholderText.length < currentPlaceholder.length) {
+        placeholderTimeoutRef.current = setTimeout(() => {
+          setPlaceholderText(currentPlaceholder.slice(0, placeholderText.length + 1));
+        }, 50); // Typing speed
+      } else {
+        // Full text shown, wait before erasing
+        placeholderTimeoutRef.current = setTimeout(() => {
+          setIsTyping(false);
+        }, 2000); // Show full text for 2 seconds
+      }
+    } else {
+      // Erasing animation
+      if (placeholderText.length > 0) {
+        placeholderTimeoutRef.current = setTimeout(() => {
+          setPlaceholderText(placeholderText.slice(0, -1));
+        }, 30); // Erasing speed (faster than typing)
+      } else {
+        // Move to next placeholder
+        setIsTyping(true);
+        setPlaceholderIndex((prev) => (prev + 1) % placeholders.length);
+      }
+    }
+
+    return () => {
+      if (placeholderTimeoutRef.current) {
+        clearTimeout(placeholderTimeoutRef.current);
+      }
+    };
+  }, [placeholderText, isTyping, placeholderIndex, step, input, placeholders]);
+
   /* ===================== FILE UPLOAD ===================== */
 
   async function handleFileUpload(file: File) {
@@ -909,7 +956,7 @@ export default function Page() {
                 }
               }
             }}
-            placeholder="What are you selling? (or upload a pitch deck, presentation, etc.)"
+            placeholder={input.trim() === "" && step === 0 ? placeholderText || placeholders[0] : "What are you selling? (or upload a pitch deck, presentation, etc.)"}
             className="resize-none border-zinc-200 bg-white/70 text-base focus-visible:ring-0"
           />
 
