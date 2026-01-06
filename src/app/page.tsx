@@ -43,9 +43,13 @@ export default function Page() {
   const [uploadedFiles, setUploadedFiles] = useState<Array<{name: string, type: string, size: number}>>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
+  const [placeholderText, setPlaceholderText] = useState("");
+  const [isTyping, setIsTyping] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatMessagesEndRef = useRef<HTMLDivElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
+  const placeholderTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Cookie helpers
   function getCookie(name: string): string | null {
@@ -837,7 +841,9 @@ export default function Page() {
                 <span className="text-zinc-500">Get your first 100 sales.</span>
         </h1>
         <p className="mt-6 max-w-2xl text-lg text-zinc-600">
-                Connect LinkedIn → AI finds leads, writes messages, starts conversations while you build.
+                An AI agent that handles outreach, messages and conversations
+                <br />
+                so you can keep building.
         </p>
       </section>
 
@@ -969,7 +975,9 @@ export default function Page() {
                 <span className="text-zinc-500">Get your first 100 sales.</span>
               </h1>
               <p className="mt-6 max-w-2xl text-lg text-zinc-600">
-                Connect LinkedIn → AI finds leads, writes messages, starts conversations while you build.
+                An AI agent that handles outreach, messages and conversations
+                <br />
+                so you can keep building.
               </p>
             </section>
 
