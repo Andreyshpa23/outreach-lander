@@ -857,7 +857,6 @@ export default function Page() {
           <span>SalesTrigger</span>
         </div>
         <nav className="hidden items-center gap-6 text-sm text-zinc-600 md:flex">
-          <a className="hover:text-zinc-900" href="#">Features</a>
           <a className="hover:text-zinc-900" href="#">Integrations</a>
           <a className="hover:text-zinc-900" href="#">Roadmap</a>
           <a className="hover:text-zinc-900" href="#">Pricing</a>
