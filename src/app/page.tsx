@@ -851,20 +851,19 @@ export default function Page() {
       </div>
 
       {/* Header */}
-      <header className="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-6 py-6">
-        <div className="flex items-center gap-2 font-semibold tracking-tight">
+      <header className="relative z-10 mx-auto flex max-w-7xl items-center justify-center px-6 py-6">
+        <div className="flex items-center gap-2 font-semibold tracking-tight absolute left-6">
           <span className="inline-block h-7 w-7 rounded-full bg-zinc-900" />
           <span>SalesTrigger</span>
         </div>
         <nav className="hidden items-center gap-6 text-sm text-zinc-600 md:flex">
-          <a className="hover:text-zinc-900" href="#">Integrations</a>
           <a className="hover:text-zinc-900" href="#">Roadmap</a>
           <a className="hover:text-zinc-900" href="#">Pricing</a>
           <a className="hover:text-zinc-900" href="#">FAQ</a>
           <a className="hover:text-zinc-900" href="#">Contacts</a>
         </nav>
         <Button 
-          className="rounded-full px-5"
+          className="rounded-full px-5 absolute right-6"
           onClick={() => window.open('https://outreach.salestrigger.io', '_blank')}
         >
           Log in
