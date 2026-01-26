@@ -57,17 +57,32 @@ export default function Page() {
   // Cookie helpers
   function getCookie(name: string): string | null {
     if (typeof document === 'undefined') return null;
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop()?.split(';').shift() || null;
-    return null;
+    try {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) {
+        const cookieValue = parts.pop()?.split(';').shift() || null;
+        return cookieValue ? decodeURIComponent(cookieValue) : null;
+      }
+      return null;
+    } catch (error) {
+      console.error(`Error reading cookie ${name}:`, error);
+      return null;
+    }
   }
 
   function setCookie(name: string, value: string, days: number = 365) {
     if (typeof document === 'undefined') return;
-    const expires = new Date();
-    expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000);
-    document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/`;
+    try {
+      const expires = new Date();
+      expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000);
+      // Encode value to handle special characters in JSON
+      const encodedValue = encodeURIComponent(value);
+      document.cookie = `${name}=${encodedValue};expires=${expires.toUTCString()};path=/;SameSite=Lax`;
+      console.log(`Cookie ${name} saved successfully`);
+    } catch (error) {
+      console.error(`Error saving cookie ${name}:`, error);
+    }
   }
 
   // Initialize session on mount
@@ -696,45 +711,54 @@ export default function Page() {
     }
 
     // Save results to session and cookies - NEW FORMAT: X-Fast-Creation
+    // Always save cookie, even if sessionId is not yet set
+    // Get final product insights
+    const finalUTPs = productUTPs.length > 0 ? productUTPs : (parsed.product_utps || []);
+    const finalMetrics = productMetrics.length > 0 ? productMetrics : (parsed.product_metrics || []);
+    
+    // Create short description from UTPs and metrics (key points and features)
+    const descriptionParts: string[] = [];
+    
+    // Add key USPs
+    if (finalUTPs.length > 0) {
+      descriptionParts.push(...finalUTPs.slice(0, 3)); // Top 3 USPs
+    }
+    
+    // Add key metrics
+    if (finalMetrics.length > 0) {
+      descriptionParts.push(...finalMetrics.slice(0, 2)); // Top 2 metrics
+    }
+    
+    // Join into short description (max 500 chars)
+    const shortDescription = descriptionParts
+      .filter(p => p && p.trim().length > 0)
+      .join('. ')
+      .substring(0, 500);
+    
+    // Get product name (from extracted name or initial input)
+    const finalProductName = productName || initialInput || (parsed.product_name || 'Product');
+    
+    // Prepare new format data for X-Fast-Creation cookie
+    const fastCreationData = {
+      product: {
+        name: finalProductName,
+        description: shortDescription || 'Product details and key features',
+        goal_type: "Manual_Goal",
+        goal_description: "Надо забукать с ним кол, попроси его прислать удобные слоты для созвона или его календли"
+      }
+    };
+    
+    // Save to X-Fast-Creation cookie (30 days) - ALWAYS save, regardless of sessionId
+    try {
+      const cookieValue = JSON.stringify(fastCreationData);
+      setCookie('X-Fast-Creation', cookieValue, 30);
+      console.log('X-Fast-Creation cookie saved:', fastCreationData);
+    } catch (error) {
+      console.error('Error saving X-Fast-Creation cookie:', error);
+    }
+    
+    // Continue with session save if sessionId exists
     if (sessionId) {
-      // Get final product insights
-      const finalUTPs = productUTPs.length > 0 ? productUTPs : (parsed.product_utps || []);
-      const finalMetrics = productMetrics.length > 0 ? productMetrics : (parsed.product_metrics || []);
-      
-      // Create short description from UTPs and metrics (key points and features)
-      const descriptionParts: string[] = [];
-      
-      // Add key USPs
-      if (finalUTPs.length > 0) {
-        descriptionParts.push(...finalUTPs.slice(0, 3)); // Top 3 USPs
-      }
-      
-      // Add key metrics
-      if (finalMetrics.length > 0) {
-        descriptionParts.push(...finalMetrics.slice(0, 2)); // Top 2 metrics
-      }
-      
-      // Join into short description (max 500 chars)
-      const shortDescription = descriptionParts
-        .filter(p => p && p.trim().length > 0)
-        .join('. ')
-        .substring(0, 500);
-      
-      // Get product name (from extracted name or initial input)
-      const finalProductName = productName || initialInput || (parsed.product_name || 'Product');
-      
-      // Prepare new format data for X-Fast-Creation cookie
-      const fastCreationData = {
-        product: {
-          name: finalProductName,
-          description: shortDescription || 'Product details and key features',
-          goal_type: "Manual_Goal",
-          goal_description: "Надо забукать с ним кол, попроси его прислать удобные слоты для созвона или его календли"
-        }
-      };
-      
-      // Save to X-Fast-Creation cookie (30 days)
-      setCookie('X-Fast-Creation', JSON.stringify(fastCreationData), 30);
       
       // Also keep full output data for internal use
       const fullOutputData = {
