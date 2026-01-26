@@ -25,6 +25,7 @@ interface UserSession {
     apiData: any;
     productUTPs: string[];
     productMetrics: string[];
+    case_studies?: string[];
     timestamp: string;
   };
 }
@@ -116,4 +117,5 @@ export function getSession(sessionId: string): UserSession | null {
 export function generateSessionId(): string {
   return `session_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
 }
+
 

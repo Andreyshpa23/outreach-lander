@@ -32,6 +32,7 @@ export default function Page() {
   const [completedAnalysisItems, setCompletedAnalysisItems] = useState(0);
   const [productUTPs, setProductUTPs] = useState<string[]>([]);
   const [productMetrics, setProductMetrics] = useState<string[]>([]);
+  const [caseStudies, setCaseStudies] = useState<string[]>([]);
   const [chatMessages, setChatMessages] = useState<Array<{role: 'agent' | 'user', text: string}>>([]);
   const [currentAnswer, setCurrentAnswer] = useState("");
   const [needsMoreInfo, setNeedsMoreInfo] = useState(false);
@@ -97,9 +98,21 @@ export default function Page() {
               setApiData(data.lastResult.apiData);
               setProductUTPs(data.lastResult.productUTPs || []);
               setProductMetrics(data.lastResult.productMetrics || []);
+              setCaseStudies(data.lastResult.case_studies || []);
               
               // Restore results to cookies for quick access
               setCookie('st_last_result', JSON.stringify(data.lastResult), 7);
+              
+              // Also save to new format cookie if not exists
+              const fullOutputData = {
+                apiData: data.lastResult.apiData,
+                productUTPs: data.lastResult.productUTPs || [],
+                productMetrics: data.lastResult.productMetrics || [],
+                caseStudies: data.lastResult.case_studies || [],
+                sessionId: currentSessionId,
+                timestamp: data.lastResult.timestamp || new Date().toISOString()
+              };
+              setCookie('st_user_output', JSON.stringify(fullOutputData), 30);
               
               // If we have saved data, show it
               if (data.lastResult.apiData) {
@@ -110,19 +123,36 @@ export default function Page() {
         } else {
           setSessionId(currentSessionId);
           
-          // Try to load from cookies first (faster)
-          const savedResult = getCookie('st_last_result');
-          if (savedResult) {
+          // Try to load from cookies first (faster) - check new format first
+          const savedUserOutput = getCookie('st_user_output');
+          if (savedUserOutput) {
             try {
-              const parsed = JSON.parse(savedResult);
+              const parsed = JSON.parse(savedUserOutput);
               setApiData(parsed.apiData);
               setProductUTPs(parsed.productUTPs || []);
               setProductMetrics(parsed.productMetrics || []);
+              setCaseStudies(parsed.caseStudies || []);
               if (parsed.apiData) {
                 setStep(4);
               }
             } catch (e) {
-              console.error('Error parsing saved result:', e);
+              console.error('Error parsing saved user output:', e);
+            }
+          } else {
+            // Fallback to old format
+            const savedResult = getCookie('st_last_result');
+            if (savedResult) {
+              try {
+                const parsed = JSON.parse(savedResult);
+                setApiData(parsed.apiData);
+                setProductUTPs(parsed.productUTPs || []);
+                setProductMetrics(parsed.productMetrics || []);
+                if (parsed.apiData) {
+                  setStep(4);
+                }
+              } catch (e) {
+                console.error('Error parsing saved result:', e);
+              }
             }
           }
           
@@ -136,11 +166,24 @@ export default function Page() {
           
           if (res.ok) {
             const data = await res.json();
-            if (data.lastResult && !savedResult) {
+            if (data.lastResult && !savedUserOutput && !getCookie('st_last_result')) {
               setApiData(data.lastResult.apiData);
               setProductUTPs(data.lastResult.productUTPs || []);
               setProductMetrics(data.lastResult.productMetrics || []);
+              setCaseStudies(data.lastResult.case_studies || []);
               setCookie('st_last_result', JSON.stringify(data.lastResult), 7);
+              
+              // Also save to new format
+              const fullOutputData = {
+                apiData: data.lastResult.apiData,
+                productUTPs: data.lastResult.productUTPs || [],
+                productMetrics: data.lastResult.productMetrics || [],
+                caseStudies: data.lastResult.case_studies || [],
+                sessionId: currentSessionId,
+                timestamp: data.lastResult.timestamp || new Date().toISOString()
+              };
+              setCookie('st_user_output', JSON.stringify(fullOutputData), 30);
+              
               if (data.lastResult.apiData) {
                 setStep(4);
               }
@@ -479,6 +522,11 @@ export default function Page() {
           product_metrics: info.product_metrics || [],
           case_studies: info.case_studies || []
         };
+        
+        // Save case studies to state
+        if (info.case_studies && Array.isArray(info.case_studies) && info.case_studies.length > 0) {
+          setCaseStudies(info.case_studies);
+        }
 
         // Wait for Product Insights to be shown (3 seconds), then move to Step 2 and start generation
         setTimeout(async () => {
@@ -621,16 +669,39 @@ export default function Page() {
       setProductMetrics(parsed.product_metrics);
     }
 
-    // Save results to session and cookies
+    // Save results to session and cookies - FULL OUTPUT DATA
     if (sessionId) {
-      const resultToSave = {
+      // Prepare complete output data for saving
+      const fullOutputData = {
+        // Full API response with all segments, messages, filters, etc.
         apiData: parsed,
+        
+        // Product insights
         productUTPs: productUTPs.length > 0 ? productUTPs : (parsed.product_utps || []),
         productMetrics: productMetrics.length > 0 ? productMetrics : (parsed.product_metrics || []),
-        timestamp: new Date().toISOString()
+        caseStudies: caseStudies.length > 0 ? caseStudies : (parsed.case_studies || []),
+        
+        // Metadata
+        sessionId: sessionId,
+        timestamp: new Date().toISOString(),
+        
+        // Chat history (if available)
+        chatHistory: chatMessages.length > 0 ? chatMessages : undefined,
+        
+        // Uploaded files info (if available)
+        uploadedFiles: uploadedFiles.length > 0 ? uploadedFiles : undefined
       };
       
-      // Save to cookies (quick access)
+      // Save to cookies (quick access) - this will be accessible after auth
+      setCookie('st_user_output', JSON.stringify(fullOutputData), 30); // 30 days
+      
+      // Also keep the old cookie for backward compatibility
+      const resultToSave = {
+        apiData: parsed,
+        productUTPs: fullOutputData.productUTPs,
+        productMetrics: fullOutputData.productMetrics,
+        timestamp: fullOutputData.timestamp
+      };
       setCookie('st_last_result', JSON.stringify(resultToSave), 7);
       
       // Save to session (server-side)
@@ -643,8 +714,9 @@ export default function Page() {
         body: JSON.stringify({
           sessionId,
           result: parsed,
-          productUTPs: resultToSave.productUTPs,
-          productMetrics: resultToSave.productMetrics
+          productUTPs: fullOutputData.productUTPs,
+          productMetrics: fullOutputData.productMetrics,
+          case_studies: fullOutputData.caseStudies
         })
       }).catch(err => console.error('Error saving session:', err));
     }

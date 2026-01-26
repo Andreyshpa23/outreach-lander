@@ -29,7 +29,7 @@ export async function GET(req: Request) {
 // POST - сохранить результат
 export async function POST(req: Request) {
   try {
-    const { sessionId, result, productUTPs, productMetrics } = await req.json();
+    const { sessionId, result, productUTPs, productMetrics, case_studies } = await req.json();
     
     if (!sessionId) {
       return NextResponse.json(
@@ -48,6 +48,7 @@ export async function POST(req: Request) {
         apiData: result,
         productUTPs: productUTPs || [],
         productMetrics: productMetrics || [],
+        case_studies: case_studies || [],
         timestamp: new Date().toISOString()
       };
       
@@ -65,4 +66,5 @@ export async function POST(req: Request) {
     );
   }
 }
+
 
