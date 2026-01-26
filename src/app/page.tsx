@@ -78,8 +78,9 @@ export default function Page() {
       expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000);
       // Encode value to handle special characters in JSON
       const encodedValue = encodeURIComponent(value);
-      document.cookie = `${name}=${encodedValue};expires=${expires.toUTCString()};path=/;SameSite=Lax`;
-      console.log(`Cookie ${name} saved successfully`);
+      // Set domain to .salestrigger.io so cookie is available on all subdomains
+      document.cookie = `${name}=${encodedValue};expires=${expires.toUTCString()};path=/;domain=.salestrigger.io;SameSite=Lax`;
+      console.log(`Cookie ${name} saved successfully on .salestrigger.io`);
     } catch (error) {
       console.error(`Error saving cookie ${name}:`, error);
     }
