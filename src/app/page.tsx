@@ -37,6 +37,8 @@ export default function Page() {
   const [currentAnswer, setCurrentAnswer] = useState("");
   const [needsMoreInfo, setNeedsMoreInfo] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [initialInput, setInitialInput] = useState<string>(""); // Store initial product input/URL
+  const [productName, setProductName] = useState<string>(""); // Store extracted product name
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
@@ -358,6 +360,20 @@ export default function Page() {
     setCurrentQuestionIndex(0);
     setAnswers({});
     
+    // Save initial input (product name/URL) for later use
+    setInitialInput(input.trim());
+    
+    // Extract product name from input (URL or text)
+    let extractedName = input.trim();
+    if (extractedName.startsWith('http://') || extractedName.startsWith('https://')) {
+      // If it's a URL, use it as is
+      setProductName(extractedName);
+    } else {
+      // If it's text, use first line or first 50 chars as product name
+      const firstLine = extractedName.split('\n')[0].trim();
+      setProductName(firstLine.length > 0 ? firstLine : extractedName.substring(0, 50));
+    }
+    
     // Include uploaded files info in initial message
     let initialMessage = input;
     if (uploadedFiles.length > 0) {
@@ -422,6 +438,11 @@ export default function Page() {
       }
 
       const info = data.result;
+
+      // Update product name from API response if available
+      if (info.product_name) {
+        setProductName(info.product_name);
+      }
 
       // Safety check: If user has answered 5+ questions, force has_enough_info to true
       const answerCount = Object.keys(answers).length;
@@ -661,6 +682,11 @@ export default function Page() {
 
     setApiData(parsed);
 
+    // Extract product name from API response if available
+    if (parsed.product_name) {
+      setProductName(parsed.product_name);
+    }
+
     // Extract UTPs and metrics from API response if available (for URLs)
     if (parsed.product_utps && Array.isArray(parsed.product_utps) && parsed.product_utps.length > 0) {
       setProductUTPs(parsed.product_utps);
@@ -669,16 +695,55 @@ export default function Page() {
       setProductMetrics(parsed.product_metrics);
     }
 
-    // Save results to session and cookies - FULL OUTPUT DATA
+    // Save results to session and cookies - NEW FORMAT: X-Fast-Creation
     if (sessionId) {
-      // Prepare complete output data for saving
+      // Get final product insights
+      const finalUTPs = productUTPs.length > 0 ? productUTPs : (parsed.product_utps || []);
+      const finalMetrics = productMetrics.length > 0 ? productMetrics : (parsed.product_metrics || []);
+      
+      // Create short description from UTPs and metrics (key points and features)
+      const descriptionParts: string[] = [];
+      
+      // Add key USPs
+      if (finalUTPs.length > 0) {
+        descriptionParts.push(...finalUTPs.slice(0, 3)); // Top 3 USPs
+      }
+      
+      // Add key metrics
+      if (finalMetrics.length > 0) {
+        descriptionParts.push(...finalMetrics.slice(0, 2)); // Top 2 metrics
+      }
+      
+      // Join into short description (max 500 chars)
+      const shortDescription = descriptionParts
+        .filter(p => p && p.trim().length > 0)
+        .join('. ')
+        .substring(0, 500);
+      
+      // Get product name (from extracted name or initial input)
+      const finalProductName = productName || initialInput || (parsed.product_name || 'Product');
+      
+      // Prepare new format data for X-Fast-Creation cookie
+      const fastCreationData = {
+        product: {
+          name: finalProductName,
+          description: shortDescription || 'Product details and key features',
+          goal_type: "Manual_Goal",
+          goal_description: "Надо забукать с ним кол, попроси его прислать удобные слоты для созвона или его календли"
+        }
+      };
+      
+      // Save to X-Fast-Creation cookie (30 days)
+      setCookie('X-Fast-Creation', JSON.stringify(fastCreationData), 30);
+      
+      // Also keep full output data for internal use
       const fullOutputData = {
         // Full API response with all segments, messages, filters, etc.
         apiData: parsed,
         
         // Product insights
-        productUTPs: productUTPs.length > 0 ? productUTPs : (parsed.product_utps || []),
-        productMetrics: productMetrics.length > 0 ? productMetrics : (parsed.product_metrics || []),
+        productUTPs: finalUTPs,
+        productMetrics: finalMetrics,
         caseStudies: caseStudies.length > 0 ? caseStudies : (parsed.case_studies || []),
         
         // Metadata
@@ -698,8 +763,8 @@ export default function Page() {
       // Also keep the old cookie for backward compatibility
       const resultToSave = {
         apiData: parsed,
-        productUTPs: fullOutputData.productUTPs,
-        productMetrics: fullOutputData.productMetrics,
+        productUTPs: finalUTPs,
+        productMetrics: finalMetrics,
         timestamp: fullOutputData.timestamp
       };
       setCookie('st_last_result', JSON.stringify(resultToSave), 7);
@@ -714,8 +779,8 @@ export default function Page() {
         body: JSON.stringify({
           sessionId,
           result: parsed,
-          productUTPs: fullOutputData.productUTPs,
-          productMetrics: fullOutputData.productMetrics,
+          productUTPs: finalUTPs,
+          productMetrics: finalMetrics,
           case_studies: fullOutputData.caseStudies
         })
       }).catch(err => console.error('Error saving session:', err));

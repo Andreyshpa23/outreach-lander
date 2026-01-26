@@ -135,12 +135,15 @@ Return ONLY valid JSON with this structure:
 {
   "has_enough_info": boolean,
   "questions": [string, string, ...] (only if has_enough_info is false, 2-4 questions),
+  "product_name": string (extract product name from input - URL or project name, always include this),
   "product_summary": string (only if has_enough_info is true),
   "product_utps": [string, string, ...] (only if has_enough_info is true, 2-4 items),
   "product_metrics": [string, string, ...] (only if has_enough_info is true, 1-3 items),
   "pain_points": [string, string, ...] (only if has_enough_info is true, 2-4 items),
   "case_studies": [string, string, ...] (only if has_enough_info is true and user provided case studies/examples, 1-3 items)
 }
+
+IMPORTANT: Always extract and return product_name. If input is a URL, use the URL as product_name. If input is text, extract the product/project name from the first sentence or first meaningful phrase.
 
 =====================
 RULES FOR GENERATING CONTEXTUAL QUESTIONS

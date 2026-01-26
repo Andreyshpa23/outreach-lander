@@ -199,6 +199,7 @@ OUTPUT FORMAT (STRICT)
 =====================
 
 {
+  "product_name": "string" (product name or URL from input),
   "performance": {
     "dialogs": number,
     "calls": number,
