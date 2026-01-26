@@ -493,7 +493,7 @@ export default function Page() {
           
           // Add question to chat if it's not already the last message
           // Use shorter delay for first question (after user's initial message), longer for subsequent ones
-          const delay = chatMessages.length === 1 ? 500 : 800;
+          const delay = chatMessages.length === 1 ? 100 : 150; // Reduced from 500-800ms to 100-150ms
           if (lastAgentMessage?.text !== unansweredQuestion) {
             setTimeout(() => {
               setChatMessages(prev => [...prev, { 
@@ -518,12 +518,12 @@ export default function Page() {
             role: 'agent', 
             text: 'Perfect! I have everything I need. Analyzing your product insights...' 
           }]);
-        }, 500);
+        }, 100); // Reduced from 500ms to 100ms
         
         // Close chat and show Product Insights (stay on Step 1 but hide chat)
         setTimeout(() => {
           setNeedsMoreInfo(false);
-        }, 2000);
+        }, 500); // Reduced from 2000ms to 500ms
         
         // Combine all information for generation
         let finalInput = input;
@@ -549,10 +549,10 @@ export default function Page() {
           setCaseStudies(info.case_studies);
         }
 
-        // Wait for Product Insights to be shown (3 seconds), then move to Step 2 and start generation
+        // Wait for Product Insights to be shown, then move to Step 2 and start generation
         setTimeout(async () => {
           await startGenerationWithInput(finalInput, productInsights);
-        }, 5000);
+        }, 1000); // Reduced from 5000ms to 1000ms
       }
     } catch (e: any) {
       console.error("Information collection error:", e);
@@ -795,15 +795,15 @@ export default function Page() {
 
     // Step 2: Choosing leads - animate progress bar smoothly
     // (Step 1 was information collection, which is already done)
-    animateProgress(50, 2000);
+    animateProgress(50, 800); // Reduced from 2000ms to 800ms
 
-    // Complete analysis items one by one (4 items, ~500ms each = 2s total)
-    setTimeout(() => setCompletedAnalysisItems(1), 500);
-    setTimeout(() => setCompletedAnalysisItems(2), 1000);
-    setTimeout(() => setCompletedAnalysisItems(3), 1500);
-    setTimeout(() => setCompletedAnalysisItems(4), 2000);
+    // Complete analysis items one by one (4 items, faster now)
+    setTimeout(() => setCompletedAnalysisItems(1), 100); // Reduced from 500ms
+    setTimeout(() => setCompletedAnalysisItems(2), 200); // Reduced from 1000ms
+    setTimeout(() => setCompletedAnalysisItems(3), 300); // Reduced from 1500ms
+    setTimeout(() => setCompletedAnalysisItems(4), 400); // Reduced from 2000ms
 
-    // Step 3: Show wow card with first message (after Step 2, ~3.5s total)
+    // Step 3: Show wow card with first message (faster now)
     setTimeout(() => {
       setStep(3);
       animateProgress(75, 0);
@@ -819,16 +819,16 @@ export default function Page() {
           setFirstMessageComplete(true);
         }, typingDuration + 100);
 
-        // Step 4: Only start AFTER first message is fully typed + delay (2s pause)
-        const step4Delay = typingDuration + 2000; // Wait for typing + 2s pause
+        // Step 4: Only start AFTER first message is fully typed + delay (reduced pause)
+        const step4Delay = typingDuration + 500; // Reduced from typingDuration + 2000ms to + 500ms
         setTimeout(() => {
           setStep(4);
           animateProgress(100, 0);
           // Animate metrics counting up
           if (parsed.performance) {
             animateMetric("dialogs", parsed.performance.dialogs);
-            setTimeout(() => animateMetric("calls", parsed.performance.calls), 300);
-            setTimeout(() => animateMetric("deals", parsed.performance.deals), 600);
+            setTimeout(() => animateMetric("calls", parsed.performance.calls), 100); // Reduced from 300ms
+            setTimeout(() => animateMetric("deals", parsed.performance.deals), 200); // Reduced from 600ms
           }
           
           // Type filters after a delay
@@ -843,7 +843,7 @@ export default function Page() {
           });
               }, 18, i * 200)
       );
-          }, 800);
+          }, 200); // Reduced from 800ms
 
           // Type personalization after filters
     setTimeout(() => {
@@ -857,7 +857,7 @@ export default function Page() {
           });
               }, 18, i * 200 + 800)
       );
-          }, 2500);
+          }, 500); // Reduced from 2500ms
 
           // Type all messages after personalization
     setTimeout(() => {
@@ -882,14 +882,14 @@ export default function Page() {
       );
       setLoading(false);
             // Activate messages one by one
-            setTimeout(() => setActiveMessageIndex(0), 4000);
-            setTimeout(() => setActiveMessageIndex(1), 5000);
-            setTimeout(() => setActiveMessageIndex(2), 6000);
-            setTimeout(() => setActiveMessageIndex(3), 7000);
-          }, 4000);
+            setTimeout(() => setActiveMessageIndex(0), 800); // Reduced from 4000ms
+            setTimeout(() => setActiveMessageIndex(1), 1000); // Reduced from 5000ms
+            setTimeout(() => setActiveMessageIndex(2), 1200); // Reduced from 6000ms
+            setTimeout(() => setActiveMessageIndex(3), 1400); // Reduced from 7000ms
+          }, 800); // Reduced from 4000ms
         }, step4Delay);
       }
-    }, 3500);
+    }, 800); // Reduced from 3500ms to 800ms
   }
 
   function animateProgress(target: number, duration: number) {
