@@ -739,6 +739,14 @@ export default function Page() {
     // Get product name (from extracted name or initial input)
     const finalProductName = productName || initialInput || (parsed.product_name || 'Product');
     
+    // Extract segments data (name and personalization)
+    const segmentsData = parsed.segments && Array.isArray(parsed.segments) 
+      ? parsed.segments.map((seg: any) => ({
+          name: seg.name || 'Segment',
+          personalization: seg.personalization_ideas || seg.personalization || ''
+        }))
+      : [];
+    
     // Prepare new format data for X-Fast-Creation cookie
     const fastCreationData = {
       product: {
@@ -746,7 +754,8 @@ export default function Page() {
         description: shortDescription || 'Product details and key features',
         goal_type: "Manual_Goal",
         goal_description: "Надо забукать с ним кол, попроси его прислать удобные слоты для созвона или его календли"
-      }
+      },
+      segments: segmentsData
     };
     
     // Save to X-Fast-Creation cookie (30 days) - ALWAYS save, regardless of sessionId
@@ -756,6 +765,19 @@ export default function Page() {
       console.log('X-Fast-Creation cookie saved:', fastCreationData);
     } catch (error) {
       console.error('Error saving X-Fast-Creation cookie:', error);
+    }
+    
+    // Save leads_ref cookie (link to leads file) - placeholder for now
+    // This will be updated when leads file is uploaded/created
+    try {
+      const leadsRefData = {
+        file_url: null // Will be set when leads file is available
+      };
+      const leadsRefValue = JSON.stringify(leadsRefData);
+      setCookie('leads_ref', leadsRefValue, 30);
+      console.log('leads_ref cookie saved:', leadsRefData);
+    } catch (error) {
+      console.error('Error saving leads_ref cookie:', error);
     }
     
     // Continue with session save if sessionId exists
