@@ -1,14 +1,31 @@
 <svg width="180" height="40" viewBox="0 0 180 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="logoGradient" x1="0%" y1="50%" x2="100%" y2="50%">
+      <stop offset="0%" stop-color="#3B82F6"/>
+      <stop offset="40%" stop-color="#8B5CF6"/>
+      <stop offset="70%" stop-color="#F97316"/>
+      <stop offset="100%" stop-color="#EF4444"/>
+    </linearGradient>
+    <radialGradient id="logoRadial" cx="50%" cy="50%">
+      <stop offset="0%" stop-color="#3B82F6" stop-opacity="0.8"/>
+      <stop offset="50%" stop-color="#8B5CF6" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#F97316" stop-opacity="0.4"/>
+    </radialGradient>
+  </defs>
+  
   <!-- Icon circle -->
   <g transform="translate(0, 0)">
     <!-- Outer dark circle -->
     <circle cx="20" cy="20" r="18" fill="#1F2937"/>
     
-    <!-- Orange/gold crescent shape inside (right side) -->
-    <path d="M 20 8 A 12 12 0 0 1 32 20 A 12 12 0 0 1 20 32 A 8 8 0 0 0 20 8 Z" fill="#F97316"/>
+    <!-- Swirling pattern inside - S-like curve with gradient -->
+    <path d="M 8 20 Q 12 8, 20 12 Q 28 16, 32 20 Q 28 24, 20 28 Q 12 24, 8 20" fill="url(#logoGradient)" opacity="0.9"/>
     
-    <!-- Inner dark circle to create crescent effect -->
-    <circle cx="20" cy="20" r="8" fill="#1F2937"/>
+    <!-- Additional gradient overlay for depth -->
+    <circle cx="20" cy="20" r="14" fill="url(#logoRadial)" opacity="0.7"/>
+    
+    <!-- Inner highlight -->
+    <ellipse cx="18" cy="18" rx="6" ry="8" fill="#3B82F6" opacity="0.3"/>
   </g>
   
   <!-- Text "SalesTrigger" -->
