@@ -28,16 +28,22 @@ type TargetAudienceBody = {
 function targetAudienceToIcp(ta: TargetAudienceBody): Icp {
   const countries = ta.geo ? ta.geo.split(",").map((s) => s.trim()).filter(Boolean) : undefined;
   const industries = ta.industry ? ta.industry.split(",").map((s) => s.trim()).filter(Boolean) : undefined;
+  // Parse company_size: "1-10, 11-50, 51-200" -> ["1-10", "11-50", "51-200"]
+  // Keep hyphen format (Apollo format), don't convert to comma
   const employeeRanges = ta.company_size
     ? ta.company_size
         .split(",")
         .map((s) => s.trim())
+        .filter(Boolean)
+        // Keep as-is if already in Apollo format (with hyphen)
+        // Convert "500+" to "501+" or similar if needed
         .map((part) => {
-          if (part.includes("-")) return part.replace("-", ",");
-          if (part.endsWith("+")) return part.replace("+", ",").replace(/\d+/, (m) => m + ",") || "501,";
+          if (part.includes("-")) return part; // Already in Apollo format
+          if (part.endsWith("+")) return part; // Keep "500+" as-is, Apollo handles it
+          // If no hyphen and no plus, assume it's a single number - convert to range
+          // But better to keep as-is and let toApolloEmployeeRanges handle it
           return part;
         })
-        .filter(Boolean)
     : undefined;
   return {
     geo: countries?.length ? ({ countries } as IcpGeo) : undefined,

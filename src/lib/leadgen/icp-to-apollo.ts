@@ -54,9 +54,22 @@ function industryTagIdsOnlyIfNumeric(industries: string[]): string[] | undefined
 function toApolloEmployeeRanges(ranges: string[]): string[] {
   return ranges.map((r) => {
     const s = String(r).trim();
+    // Already in Apollo format (has hyphen)
     if (s.includes("-")) return s;
-    if (s.includes(",")) return s.replace(",", "-");
+    // Convert comma to hyphen: "11,50" -> "11-50"
+    if (s.includes(",")) {
+      const converted = s.replace(",", "-");
+      console.log(`[icp-to-apollo] Converted employee range "${s}" -> "${converted}"`);
+      return converted;
+    }
+    // Keep "500+" format as-is
     if (/^\d+\+$/.test(s)) return s;
+    // Single number? Try to make a range (but this is unusual)
+    // Better to log and return as-is
+    if (/^\d+$/.test(s)) {
+      console.warn(`[icp-to-apollo] Single number employee range "${s}", keeping as-is`);
+      return s;
+    }
     return s;
   }).filter(Boolean);
 }
