@@ -57,9 +57,13 @@ export async function POST(req: Request) {
 
     createJob(job_id, input);
 
-    const origin = process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    // Use request origin in dev so run is triggered on same host/port
+    const host = req.headers.get("host") || req.headers.get("x-forwarded-host");
+    const proto = req.headers.get("x-forwarded-proto") || (host && host.includes("localhost") ? "http" : "https");
+    const origin =
+      process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : process.env.NEXT_PUBLIC_APP_URL ?? (host ? `${proto}://${host}` : "http://localhost:3000");
     const resultsUrl = `${origin}/api/leadgen/${job_id}`;
 
     // Trigger worker (fire-and-forget)

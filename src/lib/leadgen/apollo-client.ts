@@ -21,6 +21,8 @@ export interface ApolloSearchFilters {
 export interface ApolloPerson {
   id?: string;
   name?: string;
+  first_name?: string;
+  last_name?: string;
   title?: string;
   city?: string;
   state?: string;
@@ -60,10 +62,16 @@ export async function searchPeople(
     throw new Error("APOLLO_API_KEY is not set");
   }
 
+  // Apollo: api_key in body + only non-empty filter arrays
+  const cleanFilters: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(filters)) {
+    if (Array.isArray(v) && v.length > 0) (cleanFilters as Record<string, unknown>)[k] = v;
+  }
   const body: Record<string, unknown> = {
+    api_key: apiKey,
     page,
     per_page: perPage,
-    ...filters,
+    ...cleanFilters,
   };
 
   let lastError: Error | null = null;
@@ -91,8 +99,11 @@ export async function searchPeople(
         throw new Error(`Apollo API error ${res.status}: ${text.slice(0, 200)}`);
       }
 
-      const data = (await res.json()) as ApolloSearchResponse;
-      return data;
+      const data = (await res.json()) as ApolloSearchResponse & { people?: ApolloPerson[]; data?: { people?: ApolloPerson[] } };
+      // Apollo may return people at top level or under data
+      const people = data.people ?? (data as { data?: { people?: ApolloPerson[] } }).data?.people ?? [];
+      const pagination = data.pagination ?? (data as { data?: { pagination?: ApolloSearchResponse["pagination"] } }).data?.pagination;
+      return { people, pagination } as ApolloSearchResponse;
     } catch (e) {
       lastError = e instanceof Error ? e : new Error(String(e));
       if (attempt < MAX_RETRIES - 1) {

@@ -25,11 +25,19 @@ const s3Client =
       })
     : null;
 
+/**
+ * Формат JSON в MinIO (demo-imports/{uuid}.json):
+ * - product: name, description, goal_type (MANUAL_GOAL), goal_description
+ * - segments: name, personalization, leads (массив ссылок LinkedIn), опционально outreach_personalization, dialog_personalization
+ */
 export interface DemoImportSegment {
   name: string;
   personalization: string;
+  /** Ссылки на LinkedIn, например https://linkedin.com/in/jane-smith-1 */
   leads: string[];
+  /** Если задано — промпт для outreach берётся целиком отсюда */
   outreach_personalization?: string;
+  /** Если задано — промпт для диалога берётся целиком отсюда */
   dialog_personalization?: string;
 }
 

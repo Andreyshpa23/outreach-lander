@@ -23,8 +23,12 @@ export function normalizePerson(person: ApolloPerson): Lead {
               : "500+"
       : "";
 
+  const fullName =
+    person.name?.trim() ||
+    [person.first_name, person.last_name].filter(Boolean).join(" ").trim() ||
+    "";
   return {
-    full_name: String(person.name ?? "").trim(),
+    full_name: fullName,
     title: String(person.title ?? "").trim(),
     location: location.trim(),
     linkedin_url: String(person.linkedin_url ?? "").trim(),

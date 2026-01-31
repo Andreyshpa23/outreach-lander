@@ -23,7 +23,7 @@ export async function POST(req: Request) {
 
     const { objectKey } = await uploadDemoImportToS3(payload);
 
-    // objectKey is {uuid}.json, cookie must contain exactly this value
+    // objectKey is {uuid}.json, cookie stores only this id
     const cookieValue = objectKey;
 
     const res = NextResponse.json({
@@ -31,9 +31,8 @@ export async function POST(req: Request) {
       key: cookieValue,
     });
 
-    // Set cookie DEMO_IMPORT_SDR with the S3 object key
-    // Domain is set to .salestrigger.io so it can be reused across subdomains
-    res.cookies.set("DEMO_IMPORT_SDR", cookieValue, {
+    // Cookie demo_st_minio_id — только id записи в MinIO (object key)
+    res.cookies.set("demo_st_minio_id", cookieValue, {
       path: "/",
       maxAge: 60 * 60 * 24 * 30, // 30 days
       sameSite: "lax",

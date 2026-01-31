@@ -55,6 +55,27 @@ UI MinIO: порт 9001. Для приложения нужен API: порт 90
 
 ---
 
+## Деплой на Vercel — все переменные
+
+Чтобы на Vercel работали demo-import (MinIO), leadgen (Apollo) и основной флоу:
+
+| Переменная | Назначение |
+|------------|------------|
+| `AZURE_OPENAI_ENDPOINT` | Azure OpenAI |
+| `AZURE_OPENAI_API_KEY` | Azure OpenAI |
+| `AZURE_OPENAI_DEPLOYMENT` | Azure OpenAI |
+| `AZURE_OPENAI_API_VERSION` | (опционально) |
+| `DAILY_REQUEST_LIMIT` | Лимит запросов в день |
+| `MINIO_ENDPOINT` | MinIO API (порт 9000) |
+| `MINIO_BUCKET` | Имя бакета |
+| `MINIO_ACCESS_KEY` | MinIO |
+| `MINIO_SECRET_KEY` | MinIO |
+| `APOLLO_API_KEY` | Master API key Apollo (сбор лидов) |
+
+Leadgen (POST /api/leadgen/run) может выполняться до 60 сек — на Vercel Pro лимит 60s по умолчанию.
+
+---
+
 ## Как добавить переменную в Vercel:
 
 1. Зайдите на https://vercel.com
