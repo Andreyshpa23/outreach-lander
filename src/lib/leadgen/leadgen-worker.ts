@@ -264,7 +264,8 @@ export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJob
   const shouldUpdateMinio =
     minioPayload?.product &&
     minioPayload?.segments?.length &&
-    (totalLinkedIn > 0 || minioKeyToUpdate);
+    minioKeyToUpdate != null &&
+    minioKeyToUpdate !== "";
   let minioError: string | undefined;
   if (shouldUpdateMinio) {
     try {

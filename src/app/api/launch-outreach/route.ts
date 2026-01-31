@@ -7,9 +7,11 @@
 import { NextResponse } from "next/server";
 import {
   DemoImportPayload,
+  generateDemoImportKey,
   uploadDemoImportToS3,
   validateDemoImportPayload,
 } from "@/lib/demo-import-storage";
+import { getMinioClient } from "@/lib/minio-config";
 import { createJob, generateJobId } from "@/lib/leadgen/job-store";
 import type { LeadgenJobInput, Icp, IcpGeo, IcpPositions, IcpCompanySize, SegmentIcp } from "@/lib/leadgen/types";
 import { runLeadgenWorker } from "@/lib/leadgen/leadgen-worker";
@@ -111,23 +113,17 @@ export async function POST(req: Request) {
       );
     }
 
-    let objectKey: string;
-    try {
-      const result = await uploadDemoImportToS3(payload);
-      objectKey = result.objectKey;
-    } catch (uploadErr: unknown) {
-      const msg = uploadErr instanceof Error ? uploadErr.message : String(uploadErr);
-      if (msg.includes("not configured") || msg.includes("S3 client")) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "MinIO is not configured on server. Set MINIO_ENDPOINT, MINIO_BUCKET, MINIO_ACCESS_KEY, MINIO_SECRET_KEY in Vercel env.",
-          },
-          { status: 503 }
-        );
-      }
-      throw uploadErr;
+    if (!getMinioClient()) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "MinIO is not configured on server. Set MINIO_ENDPOINT, MINIO_BUCKET, MINIO_ACCESS_KEY, MINIO_SECRET_KEY in Vercel env.",
+        },
+        { status: 503 }
+      );
     }
+
+    const objectKey = generateDemoImportKey();
 
     const baseIcp = target_audience ? targetAudienceToIcp(target_audience) : {};
 

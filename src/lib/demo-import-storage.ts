@@ -109,6 +109,16 @@ export function validateDemoImportPayload(
   return { valid: true };
 }
 
+/** Генерирует новый objectKey для demo-import (без записи в MinIO). */
+export function generateDemoImportKey(): string {
+  const prefix = getDemoImportPrefix();
+  const uuid =
+    (typeof crypto !== "undefined" && "randomUUID" in crypto && (crypto as any).randomUUID()) ||
+    Math.random().toString(36).slice(2) + Date.now().toString(36);
+  const fileKey = `${uuid}.json`;
+  return prefix ? `${prefix}/${fileKey}` : fileKey;
+}
+
 /**
  * Upload payload to MinIO. If existingKey is set, overwrite that object (для дополнения файла лидами).
  */
