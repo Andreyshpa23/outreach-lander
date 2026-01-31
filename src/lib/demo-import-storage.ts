@@ -11,6 +11,8 @@ export interface DemoImportLeadDetail {
   full_name: string;
   title: string;
   company_name: string;
+  /** Ссылка на профиль в Apollo, если LinkedIn недоступен */
+  apollo_profile_url?: string;
 }
 
 export interface DemoImportSegment {

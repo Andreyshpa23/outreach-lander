@@ -6,29 +6,26 @@
 import type { Lead } from "./types";
 import type { ApolloPerson } from "./apollo-client";
 
+/** Возвращает только реальный URL LinkedIn (linkedin.com). Без fallback на Apollo — если Apollo не вернул LinkedIn, возвращаем "". */
 function extractLinkedInUrl(person: ApolloPerson & Record<string, unknown>): string {
   const raw = person as Record<string, unknown>;
   const v =
     person.linkedin_url
     ?? raw.linkedin_profile_url
     ?? raw.linkedin
-    ?? raw.linkedin_url
     ?? (typeof raw.profile === "object" && raw.profile !== null
       ? String((raw.profile as Record<string, unknown>).linkedin_url ?? "").trim()
       : "");
   let s = String(v ?? "").trim();
   if (s) {
     if (!s.startsWith("http")) s = s.startsWith("linkedin.com") ? `https://${s}` : `https://www.linkedin.com/in/${s.replace(/^\/+/, "")}`;
-    return s;
+    if (s.includes("linkedin.com")) return s;
+    return "";
   }
   const slug = raw.linkedin_slug ?? raw.linkedin_id;
   if (slug && typeof slug === "string" && slug.trim()) {
     const clean = slug.trim().replace(/^\/+/, "");
     return clean ? `https://www.linkedin.com/in/${clean}` : "";
-  }
-  const id = person.id;
-  if (id && typeof id === "string" && id.trim()) {
-    return `https://app.apollo.io/#/people/${encodeURIComponent(id.trim())}`;
   }
   return "";
 }

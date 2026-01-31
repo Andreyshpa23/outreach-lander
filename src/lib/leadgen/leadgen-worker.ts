@@ -154,6 +154,7 @@ export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJob
         full_name: l.full_name,
         title: l.title,
         company_name: l.company_name,
+        ...(l.apollo_person_id && !l.linkedin_url && { apollo_profile_url: `https://app.apollo.io/#/people/${l.apollo_person_id}` }),
       }));
       const payload = {
         product: {
