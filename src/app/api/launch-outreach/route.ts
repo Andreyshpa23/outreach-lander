@@ -16,7 +16,7 @@ import type { LeadgenJobInput, Icp, IcpGeo, IcpPositions, IcpCompanySize, Segmen
 import { runLeadgenWorker } from "@/lib/leadgen/leadgen-worker";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 60; // Vercel Pro plan allows up to 60s, Free plan = 10s
 
 type TargetAudienceBody = {
   geo?: string;
@@ -205,7 +205,7 @@ export async function POST(req: Request) {
       job_id,
       icp: baseIcp,
       ...(segment_icps.length > 0 && { segment_icps }),
-      limits: { target_leads: 20, max_runtime_ms: 8000 },
+      limits: { target_leads: 50, max_runtime_ms: 50000 }, // 50 leads per segment, 50s total (requires Vercel Pro plan for 60s timeout)
       minio_payload,
       minio_key_to_update: objectKey,
     };
