@@ -247,7 +247,14 @@ export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJob
   let download_csv_url: string | null = null;
   let minio_object_key: string | null = null;
 
-  if (allLeads.length > 0 && isStorageConfigured()) {
+  const minioKeyToUpdate = (input as LeadgenJobInput).minio_key_to_update;
+  const shouldUpdateMinio =
+    minioPayload?.product &&
+    minioPayload?.segments?.length &&
+    minioKeyToUpdate != null &&
+    minioKeyToUpdate !== "";
+
+  if (isStorageConfigured() && shouldUpdateMinio) {
     try {
       const csvFilename = getCsvFilename(jobId);
       const csvBody = buildCsv(allLeads);
@@ -260,12 +267,6 @@ export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJob
     }
   }
 
-  const minioKeyToUpdate = (input as LeadgenJobInput).minio_key_to_update;
-  const shouldUpdateMinio =
-    minioPayload?.product &&
-    minioPayload?.segments?.length &&
-    minioKeyToUpdate != null &&
-    minioKeyToUpdate !== "";
   let minioError: string | undefined;
   if (shouldUpdateMinio) {
     try {
