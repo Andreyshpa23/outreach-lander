@@ -15,6 +15,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "AI Sales Agent for LinkedIn | SalesTrigger",
   description: "AI SDR that finds leads, writes messages and books meetings on LinkedIn.",
+  icons: {
+    icon: "/icon.svg",
+    shortcut: "/icon.svg",
+    apple: "/icon.svg",
+  },
   openGraph: {
     title: "SalesTrigger — AI Sales Agent",
     description: "Get your first 100 sales with AI-powered LinkedIn outreach.",
