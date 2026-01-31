@@ -63,7 +63,6 @@ export default function Page() {
     industry: "",
     company_size: "",
   });
-  const [showIcpEdit, setShowIcpEdit] = useState(false);
   const [launchSaving, setLaunchSaving] = useState(false);
   const [launchResult, setLaunchResult] = useState<{ download_csv_url: string | null; leads_count: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
