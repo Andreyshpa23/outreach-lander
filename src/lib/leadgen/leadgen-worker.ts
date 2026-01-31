@@ -12,7 +12,7 @@ import { mapIcpToApolloFilters, getWideningSteps } from "./icp-to-apollo";
 import { normalizePerson, isLeadValid, onlyLinkedInUrl } from "./normalize";
 
 // Helper to get keywords from ICP (duplicated from icp-to-apollo for fallback)
-function getKeywords(icp: Icp): string[] {
+function getKeywordsFromIcp(icp: Icp): string[] {
   const kw = icp.industry_keywords ?? [];
   const ind = icp.industries ?? [];
   const seen = new Set<string>();
@@ -166,7 +166,7 @@ async function runSearchForIcp(
     
     // If still no leads, try only keywords
     if (leads.length === 0 && Date.now() < deadline - 2000) {
-      const keywords = getKeywords(resolvedIcp);
+      const keywords = getKeywordsFromIcp(resolvedIcp);
       if (keywords.length > 0) {
         const keywordFilters: ApolloSearchFilters = { q_keywords: keywords.join(", ") };
         console.log(`[leadgen] Fallback: trying only keywords:`, keywordFilters.q_keywords);
