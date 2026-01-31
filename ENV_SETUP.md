@@ -26,6 +26,27 @@
 
 ---
 
+## MinIO (S3-совместимое хранилище)
+
+Используется для: demo-import (X-Fast-Creation → DEMO_IMPORT_SDR cookie), leadgen CSV.
+
+- **`MINIO_ENDPOINT`** — адрес API MinIO (порт **9000**, не 9001). Пример: `http://92.118.114.94:9000`
+- **`MINIO_BUCKET`** — имя бакета. Пример: `demo-salestrigger`
+- **`MINIO_ACCESS_KEY`** — Access Key из MinIO Console (Identity → Service Accounts / Access Keys)
+- **`MINIO_SECRET_KEY`** — Secret Key
+
+UI MinIO: порт 9001. Для приложения нужен API: порт 9000.
+
+---
+
+## Apollo (сбор лидов)
+
+Для leadgen (POST /api/leadgen) нужен master API key из [Apollo API](https://docs.apollo.io/reference/people-api-search):
+
+- **`APOLLO_API_KEY`** — Master API Key из Apollo (Settings → API Keys)
+
+---
+
 ## Существующие переменные (уже настроены):
 
 - `AZURE_OPENAI_ENDPOINT` - ваш Azure OpenAI endpoint
@@ -54,4 +75,5 @@
 1. Сделайте несколько запросов
 2. Когда лимит будет достигнут, пользователь увидит сообщение об ошибке
 3. На следующий день счетчик сбросится автоматически
+
 

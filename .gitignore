@@ -39,6 +39,7 @@ yarn-error.log*
 # uploaded files
 uploads/
 .sessions/
+.leadgen-jobs/
 
 # vercel
 .vercel

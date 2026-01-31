@@ -11,6 +11,14 @@ import { Badge } from "@/components/ui/badge";
 
 type TypedState = { filters: string; personalization: string; messages: string[] };
 
+/** Target audience (ICP) for Apollo / lead lists */
+export type TargetAudience = {
+  geo: string;           // e.g. "United States, Canada"
+  positions: string[];    // e.g. ["CEO", "Head of Sales"]
+  industry: string;      // e.g. "SaaS, Technology"
+  company_size: string;  // e.g. "1-50", "51-200", "201-500", "500+"
+};
+
 export default function Page() {
   const [input, setInput] = useState("");
   const [step, setStep] = useState(0); // 0..4
@@ -49,6 +57,12 @@ export default function Page() {
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [placeholderText, setPlaceholderText] = useState("");
   const [isTyping, setIsTyping] = useState(true);
+  const [targetAudience, setTargetAudience] = useState<TargetAudience>({
+    geo: "",
+    positions: [],
+    industry: "",
+    company_size: "",
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatMessagesEndRef = useRef<HTMLDivElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
@@ -127,11 +141,14 @@ export default function Page() {
                 productUTPs: data.lastResult.productUTPs || [],
                 productMetrics: data.lastResult.productMetrics || [],
                 caseStudies: data.lastResult.case_studies || [],
+                targetAudience: data.lastResult.targetAudience,
                 sessionId: currentSessionId,
                 timestamp: data.lastResult.timestamp || new Date().toISOString()
               };
               setCookie('st_user_output', JSON.stringify(fullOutputData), 30);
-              
+              if (data.lastResult.targetAudience) {
+                setTargetAudience(data.lastResult.targetAudience);
+              }
               // If we have saved data, show it
               if (data.lastResult.apiData) {
                 setStep(4);
@@ -150,6 +167,9 @@ export default function Page() {
               setProductUTPs(parsed.productUTPs || []);
               setProductMetrics(parsed.productMetrics || []);
               setCaseStudies(parsed.caseStudies || []);
+              if (parsed.targetAudience) {
+                setTargetAudience(parsed.targetAudience);
+              }
               if (parsed.apiData) {
                 setStep(4);
               }
@@ -197,15 +217,34 @@ export default function Page() {
                 productUTPs: data.lastResult.productUTPs || [],
                 productMetrics: data.lastResult.productMetrics || [],
                 caseStudies: data.lastResult.case_studies || [],
+                targetAudience: data.lastResult.targetAudience,
                 sessionId: currentSessionId,
                 timestamp: data.lastResult.timestamp || new Date().toISOString()
               };
               setCookie('st_user_output', JSON.stringify(fullOutputData), 30);
-              
+              if (data.lastResult.targetAudience) {
+                setTargetAudience(data.lastResult.targetAudience);
+              }
               if (data.lastResult.apiData) {
                 setStep(4);
               }
             }
+          }
+          // Try to load target_audience from X-Fast-Creation if present
+          const xFast = getCookie('X-Fast-Creation');
+          if (xFast) {
+            try {
+              const xParsed = JSON.parse(xFast);
+              if (xParsed.target_audience && typeof xParsed.target_audience === 'object') {
+                const ta = xParsed.target_audience;
+                setTargetAudience(prev => ({
+                  geo: ta.geo ?? prev.geo,
+                  positions: Array.isArray(ta.positions) ? ta.positions : prev.positions,
+                  industry: ta.industry ?? prev.industry,
+                  company_size: ta.company_size ?? prev.company_size
+                }));
+              }
+            } catch (_) {}
           }
         }
       } catch (error) {
@@ -215,6 +254,30 @@ export default function Page() {
     
     initSession();
   }, []);
+
+  // Persist target_audience to X-Fast-Creation and st_user_output when user edits (for Apollo API)
+  useEffect(() => {
+    if (step < 4 || !apiData) return;
+    try {
+      const raw = getCookie('X-Fast-Creation');
+      if (raw) {
+        const data = JSON.parse(raw);
+        data.target_audience = {
+          geo: targetAudience.geo,
+          positions: targetAudience.positions,
+          industry: targetAudience.industry,
+          company_size: targetAudience.company_size
+        };
+        setCookie('X-Fast-Creation', JSON.stringify(data), 30);
+      }
+      const saved = getCookie('st_user_output');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        parsed.targetAudience = targetAudience;
+        setCookie('st_user_output', JSON.stringify(parsed), 30);
+      }
+    } catch (_) {}
+  }, [targetAudience, step, apiData]);
 
   const steps = useMemo(
     () => [
@@ -747,7 +810,7 @@ export default function Page() {
         }))
       : [];
     
-    // Prepare new format data for X-Fast-Creation cookie
+    // Prepare new format data for X-Fast-Creation cookie (include target_audience for Apollo)
     const fastCreationData = {
       product: {
         name: finalProductName,
@@ -755,7 +818,13 @@ export default function Page() {
         goal_type: "Manual_Goal",
         goal_description: "Надо забукать с ним кол, попроси его прислать удобные слоты для созвона или его календли"
       },
-      segments: segmentsData
+      segments: segmentsData,
+      target_audience: {
+        geo: targetAudience.geo,
+        positions: targetAudience.positions,
+        industry: targetAudience.industry,
+        company_size: targetAudience.company_size
+      }
     };
     
     // Save to X-Fast-Creation cookie (30 days) - ALWAYS save, regardless of sessionId
@@ -793,6 +862,9 @@ export default function Page() {
         productMetrics: finalMetrics,
         caseStudies: caseStudies.length > 0 ? caseStudies : (parsed.case_studies || []),
         
+        // Target audience (ICP) for Apollo / lead lists
+        targetAudience: targetAudience,
+        
         // Metadata
         sessionId: sessionId,
         timestamp: new Date().toISOString(),
@@ -828,7 +900,8 @@ export default function Page() {
           result: parsed,
           productUTPs: finalUTPs,
           productMetrics: finalMetrics,
-          case_studies: fullOutputData.caseStudies
+          case_studies: fullOutputData.caseStudies,
+          targetAudience: fullOutputData.targetAudience
         })
       }).catch(err => console.error('Error saving session:', err));
     }
@@ -1717,6 +1790,67 @@ export default function Page() {
                   </CardContent>
                 </Card>
                     </div>
+
+                  {/* Target audience (ICP) - for Apollo / lead lists */}
+                  <div className="animate-fade-in-up">
+                    <Card className="border-zinc-200 bg-white/90 shadow-lg backdrop-blur-md">
+                      <CardContent className="p-6">
+                        <div className="mb-4">
+                          <h3 className="text-lg font-semibold text-zinc-900">
+                            Target audience (ICP)
+                          </h3>
+                          <p className="text-xs text-zinc-500 mt-1">
+                            Define who to reach. Used for lead lists (e.g. Apollo).
+                          </p>
+                        </div>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div>
+                            <label className="text-xs font-medium text-zinc-600 block mb-1">Geography</label>
+                            <input
+                              type="text"
+                              value={targetAudience.geo}
+                              onChange={(e) => setTargetAudience((p) => ({ ...p, geo: e.target.value }))}
+                              placeholder="e.g. United States, Canada, UK"
+                              className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-zinc-600 block mb-1">Job titles / positions</label>
+                            <input
+                              type="text"
+                              value={targetAudience.positions.join(", ")}
+                              onChange={(e) => setTargetAudience((p) => ({
+                                ...p,
+                                positions: e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
+                              }))}
+                              placeholder="e.g. CEO, Head of Sales, VP Marketing"
+                              className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-zinc-600 block mb-1">Industry</label>
+                            <input
+                              type="text"
+                              value={targetAudience.industry}
+                              onChange={(e) => setTargetAudience((p) => ({ ...p, industry: e.target.value }))}
+                              placeholder="e.g. SaaS, Technology, Finance"
+                              className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-zinc-600 block mb-1">Company size</label>
+                            <input
+                              type="text"
+                              value={targetAudience.company_size}
+                              onChange={(e) => setTargetAudience((p) => ({ ...p, company_size: e.target.value }))}
+                              placeholder="e.g. 1-50, 51-200, 500+"
+                              className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
+                            />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
 
                   {/* First Message - Keep it visible */}
                   {wowText && wowSegmentName && (

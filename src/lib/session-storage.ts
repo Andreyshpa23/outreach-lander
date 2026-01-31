@@ -26,6 +26,12 @@ interface UserSession {
     productUTPs: string[];
     productMetrics: string[];
     case_studies?: string[];
+    targetAudience?: {
+      geo: string;
+      positions: string[];
+      industry: string;
+      company_size: string;
+    };
     timestamp: string;
   };
 }
