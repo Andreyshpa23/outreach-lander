@@ -36,6 +36,7 @@ type JobResult = {
     title: string;
     company_name: string;
     linkedin_url: string;
+    apollo_person_id?: string;
     location?: string;
   }>;
   download_csv_url: string | null;
@@ -214,9 +215,20 @@ export default function TestLeadgenPage() {
                                 rel="noopener noreferrer"
                                 className="text-blue-600 hover:underline"
                               >
-                                Профиль
+                                LinkedIn
                               </a>
-                            ) : "—"}
+                            ) : lead.apollo_person_id ? (
+                              <a
+                                href={`https://app.apollo.io/#/people/${lead.apollo_person_id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:underline"
+                              >
+                                Apollo
+                              </a>
+                            ) : (
+                              "—"
+                            )}
                           </td>
                         </tr>
                       ))}

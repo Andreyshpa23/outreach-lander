@@ -43,6 +43,13 @@ function getKeywords(icp: Icp): string[] {
   return out;
 }
 
+/** Apollo expects q_organization_industry_tag_ids to be numeric tag IDs, not names. Skip if we only have names. */
+function industryTagIdsOnlyIfNumeric(industries: string[]): string[] | undefined {
+  if (!industries.length) return undefined;
+  const numeric = industries.filter((s) => /^\d+$/.test(String(s).trim()));
+  return numeric.length ? numeric : undefined;
+}
+
 export function mapIcpToApolloFilters(
   icp: Icp,
   wideningStep: WideningStep
@@ -50,6 +57,7 @@ export function mapIcpToApolloFilters(
   const pos = icp.positions ?? {};
   const companySize = icp.company_size?.employee_ranges ?? [];
   const industries = icp.industries ?? [];
+  const industryTagIds = industryTagIdsOnlyIfNumeric(industries);
   const keywords = getKeywords(icp);
   const geo = geoToLocations(icp);
 
@@ -63,8 +71,8 @@ export function mapIcpToApolloFilters(
       if (pos.seniority?.length) {
         filters.person_seniorities = pos.seniority;
       }
-      if (industries.length) {
-        filters.q_organization_industry_tag_ids = industries;
+      if (industryTagIds?.length) {
+        filters.q_organization_industry_tag_ids = industryTagIds;
       }
       if (keywords.length) {
         filters.q_keywords = keywords.join(", ");
@@ -82,7 +90,7 @@ export function mapIcpToApolloFilters(
       const titles = [...(pos.titles_strict ?? []), ...(pos.titles_broad ?? [])];
       if (titles.length) filters.person_titles = titles;
       if (pos.seniority?.length) filters.person_seniorities = pos.seniority;
-      if (industries.length) filters.q_organization_industry_tag_ids = industries;
+      if (industryTagIds?.length) filters.q_organization_industry_tag_ids = industryTagIds;
       if (keywords.length) filters.q_keywords = keywords.join(", ");
       if (companySize.length) filters.organization_num_employees = companySize;
       if (geo.length) {
@@ -94,7 +102,7 @@ export function mapIcpToApolloFilters(
     case "relax_seniority": {
       const titles = [...(pos.titles_strict ?? []), ...(pos.titles_broad ?? [])];
       if (titles.length) filters.person_titles = titles;
-      if (industries.length) filters.q_organization_industry_tag_ids = industries;
+      if (industryTagIds?.length) filters.q_organization_industry_tag_ids = industryTagIds;
       if (keywords.length) filters.q_keywords = keywords.join(", ");
       if (companySize.length) filters.organization_num_employees = companySize;
       if (geo.length) {
@@ -106,7 +114,7 @@ export function mapIcpToApolloFilters(
     case "relax_geo": {
       const titles = [...(pos.titles_strict ?? []), ...(pos.titles_broad ?? [])];
       if (titles.length) filters.person_titles = titles;
-      if (industries.length) filters.q_organization_industry_tag_ids = industries;
+      if (industryTagIds?.length) filters.q_organization_industry_tag_ids = industryTagIds;
       if (keywords.length) filters.q_keywords = keywords.join(", ");
       if (companySize.length) filters.organization_num_employees = companySize;
       break;
@@ -114,7 +122,7 @@ export function mapIcpToApolloFilters(
     case "relax_company_size": {
       const titles = [...(pos.titles_strict ?? []), ...(pos.titles_broad ?? [])];
       if (titles.length) filters.person_titles = titles;
-      if (industries.length) filters.q_organization_industry_tag_ids = industries;
+      if (industryTagIds?.length) filters.q_organization_industry_tag_ids = industryTagIds;
       if (keywords.length) filters.q_keywords = keywords.join(", ");
       if (geo.length) {
         filters.organization_locations = geo;

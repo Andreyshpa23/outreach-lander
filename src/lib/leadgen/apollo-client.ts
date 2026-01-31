@@ -123,6 +123,13 @@ export async function searchPeople(
       });
       const pagination = data.pagination ?? (data as { data?: { pagination?: ApolloSearchResponse["pagination"] } }).data?.pagination;
       console.log("[apollo] page=" + page + " status=" + res.status + " people=" + people.length + " elapsed_ms=" + elapsed + " total_pages=" + (pagination?.total_pages ?? "?"));
+      if (people.length > 0) {
+        const first = people[0] as Record<string, unknown>;
+        const linkedinKeys = ["linkedin_url", "linkedin_profile_url", "linkedin", "linkedin_slug", "linkedin_id"];
+        const found = linkedinKeys.filter((k) => first[k] != null && String(first[k]).trim() !== "");
+        if (found.length) console.log("[apollo] first person linkedin fields:", found.map((k) => `${k}=${String(first[k]).slice(0, 60)}`).join(" "));
+        else console.log("[apollo] first person has no linkedin fields; keys:", Object.keys(first).join(","));
+      }
       return { people, pagination } as ApolloSearchResponse;
     } catch (e) {
       lastError = e instanceof Error ? e : new Error(String(e));
