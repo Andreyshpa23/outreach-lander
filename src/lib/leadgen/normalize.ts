@@ -59,11 +59,25 @@ export function normalizePerson(person: ApolloPerson): Lead {
     person.name?.trim() ||
     [person.first_name, person.last_name].filter(Boolean).join(" ").trim() ||
     "";
+  
+  // Extract LinkedIn URL - this should use linkedin_slug if available
+  const linkedinUrl = extractLinkedInUrl(person as ApolloPerson & Record<string, unknown>);
+  
+  // Debug: log if we have linkedin_slug but no linkedin_url
+  const raw = person as Record<string, unknown>;
+  if (!linkedinUrl && (raw.linkedin_slug || raw.linkedin_id)) {
+    const slug = raw.linkedin_slug ?? raw.linkedin_id;
+    if (slug && typeof slug === "string" && slug.trim()) {
+      // extractLinkedInUrl should have handled this, but log for debugging
+      console.log(`[normalize] Person has linkedin_slug/id="${slug}" but extractLinkedInUrl returned empty`);
+    }
+  }
+  
   return {
     full_name: fullName,
     title: String(person.title ?? "").trim(),
     location: location.trim(),
-    linkedin_url: extractLinkedInUrl(person as ApolloPerson & Record<string, unknown>),
+    linkedin_url: linkedinUrl,
     company_name: String(org.name ?? "").trim(),
     company_website: org.primary_domain ? `https://${String(org.primary_domain).replace(/^https?:\/\//, "")}` : "",
     company_industry: String(org.industry ?? "").trim(),
