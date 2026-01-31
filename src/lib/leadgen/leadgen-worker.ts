@@ -150,18 +150,23 @@ async function runSearchForIcp(
 }
 
 export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJobInput): Promise<void> {
+  const workerStart = Date.now();
+  console.log("[leadgen-worker] START job_id=" + jobId + " has_inputOverride=" + !!inputOverride);
   const job = inputOverride ? null : getJob(jobId);
   const input = inputOverride ?? job?.input;
   if (!input) {
+    console.error("[leadgen-worker] FAIL: no input for job_id=" + jobId);
     if (!inputOverride) updateJob(jobId, { status: "failed", error: "Job or input not found" });
     return;
   }
   if (!inputOverride && job && job.status !== "queued") {
+    console.log("[leadgen-worker] SKIP: job not queued, status=" + job.status);
     return;
   }
   if (!inputOverride) {
     updateJob(jobId, { status: "running" });
   }
+  console.log("[leadgen-worker] job_id=" + jobId + " segment_icps=" + (input.segment_icps?.length ?? 0) + " minio_key=" + (input.minio_key_to_update || "none"));
 
   const targetLeads = input.limits?.target_leads ?? TARGET_LEADS_DEFAULT;
   const maxRuntimeMs = input.limits?.max_runtime_ms ?? MAX_RUNTIME_MS_DEFAULT;
