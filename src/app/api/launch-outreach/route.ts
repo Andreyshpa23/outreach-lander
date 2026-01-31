@@ -165,11 +165,15 @@ export async function POST(req: Request) {
       product: payload.product,
       segments: payload.segments,
     };
+    // Vercel Free plan has 10s limit; Pro has 60s. Adjust via LEADGEN_MAX_RUNTIME_MS env.
+    const maxRuntimeMs = parseInt(process.env.LEADGEN_MAX_RUNTIME_MS || "50000", 10);
+    const targetLeads = parseInt(process.env.LEADGEN_TARGET_LEADS || "50", 10);
+    console.log("[launch-outreach] limits: target_leads=" + targetLeads + " max_runtime_ms=" + maxRuntimeMs);
     const input: LeadgenJobInput = {
       job_id,
       icp: baseIcp,
       ...(segment_icps.length > 0 && { segment_icps }),
-      limits: { target_leads: 100, max_runtime_ms: 55000 },
+      limits: { target_leads: targetLeads, max_runtime_ms: maxRuntimeMs },
       minio_payload,
       minio_key_to_update: objectKey,
     };
