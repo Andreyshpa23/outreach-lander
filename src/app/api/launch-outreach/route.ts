@@ -214,19 +214,28 @@ export async function POST(req: Request) {
     await runLeadgenWorker(job_id, input);
 
     const job = getJob(job_id);
+    // Use minio_object_key from job if available (updated by worker), otherwise use initial objectKey
+    const finalMinioKey = job?.minio_object_key ?? objectKey;
+    
     const res = NextResponse.json({
       success: true,
-      key: objectKey,
+      key: finalMinioKey,
       job_id,
       download_csv_url: job?.download_csv_url ?? null,
       leads_count: job?.leads_count ?? 0,
     });
-    res.cookies.set("demo_st_minio_id", objectKey, {
+    
+    // Set cookie with MinIO file ID for salestrigger.io domain
+    res.cookies.set("demo_st_minio_id", finalMinioKey, {
       path: "/",
-      maxAge: 60 * 60 * 24 * 30,
+      maxAge: 60 * 60 * 24 * 30, // 30 days
       sameSite: "lax",
-      domain: ".salestrigger.io",
+      domain: ".salestrigger.io", // Works for all subdomains: demo.salestrigger.io, app.salestrigger.io, etc.
+      secure: true, // HTTPS only
+      httpOnly: false, // Allow client-side access if needed
     });
+    
+    console.log("[launch-outreach] Set cookie demo_st_minio_id=" + finalMinioKey + " for domain=.salestrigger.io");
     return res;
   } catch (err: unknown) {
     console.error("Launch outreach error:", err);
