@@ -16,9 +16,9 @@ export const metadata: Metadata = {
   title: "AI Sales Agent for LinkedIn | SalesTrigger",
   description: "AI SDR that finds leads, writes messages and books meetings on LinkedIn.",
   icons: {
-    icon: "/icon.png",
-    shortcut: "/icon.png",
-    apple: "/icon.png",
+    icon: "/icon.svg",
+    shortcut: "/icon.svg",
+    apple: "/icon.svg",
   },
   openGraph: {
     title: "SalesTrigger — AI Sales Agent",

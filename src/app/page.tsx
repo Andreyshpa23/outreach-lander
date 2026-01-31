@@ -1189,7 +1189,7 @@ export default function Page() {
       {/* Header */}
       <header className="relative z-10 mx-auto flex max-w-7xl items-center justify-center px-6 py-6">
         <div className="flex items-center gap-3 font-semibold tracking-tight absolute left-6">
-          <img src="/logo.png" alt="SalesTrigger" className="h-10 w-auto" />
+          <img src="/logo.svg" alt="SalesTrigger" className="h-8 w-auto" />
         </div>
         <nav className="hidden items-center gap-6 text-sm text-zinc-600 md:flex">
           <a className="hover:text-zinc-900" href="#">Roadmap</a>
