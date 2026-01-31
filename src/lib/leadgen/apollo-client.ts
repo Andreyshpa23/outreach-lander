@@ -70,6 +70,12 @@ export async function searchPeople(
     if (Array.isArray(v) && v.length > 0) (cleanFilters as Record<string, unknown>)[k] = v;
     else if (typeof v === "string" && v.trim()) (cleanFilters as Record<string, unknown>)[k] = v.trim();
   }
+  
+  // Log filters being sent to Apollo (for debugging)
+  if (page === 1) {
+    console.log(`[apollo] filters being sent:`, JSON.stringify(cleanFilters, null, 2).slice(0, 500));
+  }
+  
   const body: Record<string, unknown> = {
     api_key: apiKey,
     page,
