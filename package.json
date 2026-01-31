@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:e2e": "node scripts/test-e2e.mjs",
+    "test:full": "node scripts/test-launch-outreach-e2e.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.741.0",

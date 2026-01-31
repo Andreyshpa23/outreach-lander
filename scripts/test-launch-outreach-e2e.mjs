@@ -51,6 +51,10 @@ async function main() {
       console.error("❌ No job_id or input in response");
       process.exit(1);
     }
+    input.limits = input.limits || {};
+    input.limits.target_leads = 10;
+    input.limits.max_runtime_ms = 35000;
+    console.log("   (test: target_leads=10 for faster run and more chance of LinkedIn from search)");
   } catch (e) {
     console.error("❌ launch-outreach request failed:", e.message);
     process.exit(1);
@@ -90,7 +94,7 @@ async function main() {
 
   if (!runOk) process.exit(1);
 
-  console.log("\n3. Verify MinIO file...");
+  console.log("\n3. Verify MinIO file and check LinkedIn URLs...");
   try {
     const verifyRes = await fetch(`${BASE}/api/demo-import/verify?key=${encodeURIComponent(key)}`);
     const verifyJson = await verifyRes.json();
@@ -100,16 +104,72 @@ async function main() {
     }
     const p = verifyJson.payload;
     const segs = p?.segments ?? [];
-    const totalLeads = segs.reduce((acc, s) => acc + (s.leads?.length ?? 0), 0);
     console.log("   product:", p?.product?.name ?? "-");
-    segs.forEach((s, i) => {
-      const n = (s.leads ?? []).length;
-      console.log("   segment", i, s.name, "→ leads:", n);
-    });
+
+    const isLinkedInUrl = (url) => typeof url === "string" && url.trim().includes("linkedin.com") && !url.includes("apollo.io");
+    const isApolloUrl = (url) => typeof url === "string" && url.includes("apollo.io");
+    const allLeadsUrls = [];
+    const allDetailLinkedIn = [];
+    const badUrls = [];
+
+    for (let i = 0; i < segs.length; i++) {
+      const s = segs[i];
+      const leads = s.leads ?? [];
+      const detail = s.leads_detail ?? [];
+      console.log("   segment", i, s.name, "→ leads:", leads.length, "leads_detail:", detail.length);
+
+      for (const url of leads) {
+        allLeadsUrls.push(url);
+        if (url && !isLinkedInUrl(url)) {
+          if (isApolloUrl(url)) badUrls.push({ from: "leads", url: url.slice(0, 80), segment: i });
+          else if (url.trim()) badUrls.push({ from: "leads", url: url.slice(0, 80), segment: i });
+        }
+      }
+      for (const d of detail) {
+        const u = d.linkedin_url;
+        if (u && isLinkedInUrl(u)) allDetailLinkedIn.push(u);
+      }
+    }
+
+    const linkedInInLeads = allLeadsUrls.filter(isLinkedInUrl);
+    const linkedInInDetail = [...new Set(allDetailLinkedIn)];
+
+    console.log("\n   --- Проверка URL в финальном файле ---");
+    console.log("   segments[].leads: всего", allLeadsUrls.length, ", из них LinkedIn:", linkedInInLeads.length);
+    console.log("   leads_detail[].linkedin_url (LinkedIn):", linkedInInDetail.length);
+    if (badUrls.length > 0) {
+      console.error("   ❌ В segments[].leads найдены НЕ LinkedIn URL:", badUrls.length);
+      badUrls.slice(0, 5).forEach((b) => console.error("      ", b.from, b.segment, b.url));
+    }
+    if (linkedInInLeads.length > 0) {
+      console.log("   Примеры LinkedIn URL из leads:");
+      linkedInInLeads.slice(0, 3).forEach((u) => console.log("      ", u));
+    }
+
+    const totalLeads = allLeadsUrls.length;
+    const totalDetail = segs.reduce((acc, s) => acc + (s.leads_detail ?? []).length, 0);
+    const minLinkedInRequired = 1;
+
+    if (badUrls.length > 0) {
+      console.error("\n❌ ТЕСТ НЕ ПРОЙДЕН: в финальном файле в segments[].leads есть не-LinkedIn URL (должны быть только linkedin.com).");
+      process.exit(1);
+    }
+    if (totalLeads > 0 && linkedInInLeads.length < minLinkedInRequired) {
+      console.error("\n❌ ТЕСТ НЕ ПРОЙДЕН: в файле", totalLeads, "URL в leads, но ни один не является LinkedIn (linkedin.com).");
+      process.exit(1);
+    }
+    if (totalDetail > 0 && linkedInInLeads.length < minLinkedInRequired) {
+      console.error("\n❌ ТЕСТ НЕ ПРОЙДЕН: в файле", totalDetail, "лидов в leads_detail, но в segments[].leads нет ни одного LinkedIn URL (ожидаются именно linkedin.com).");
+      console.error("\n   Подсказка: открой GET " + BASE + "/api/leadgen/apollo-sample — проверь first_person (linkedin_url, linkedin_slug).");
+      console.error("   Если в поиске Apollo нет linkedin_url — нужны кредиты People Enrichment (Apollo → Billing / Usage).");
+      process.exit(1);
+    }
     if (totalLeads > 0) {
-      console.log("\n✅ E2E OK: в MinIO", totalLeads, "лидов (LinkedIn URL).");
-    } else {
+      console.log("\n✅ E2E OK: в MinIO", totalLeads, "лидов, все URL в leads — LinkedIn.");
+    } else if (totalDetail === 0) {
       console.log("\n⚠ В MinIO 0 лидов (Apollo мог вернуть пусто или таймаут).");
+    } else {
+      console.log("\n✅ E2E OK: в MinIO", totalDetail, "лидов в leads_detail,", linkedInInLeads.length, "LinkedIn URL в leads.");
     }
   } catch (e) {
     console.error("❌ verify error:", e.message);

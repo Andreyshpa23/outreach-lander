@@ -208,7 +208,7 @@ export default function TestLeadgenPage() {
                           <td className="p-2">{lead.title}</td>
                           <td className="p-2">{lead.company_name}</td>
                           <td className="p-2">
-                            {lead.linkedin_url ? (
+                            {lead.linkedin_url && lead.linkedin_url.includes("linkedin.com") ? (
                               <a
                                 href={lead.linkedin_url}
                                 target="_blank"
@@ -216,15 +216,6 @@ export default function TestLeadgenPage() {
                                 className="text-blue-600 hover:underline"
                               >
                                 LinkedIn
-                              </a>
-                            ) : lead.apollo_person_id ? (
-                              <a
-                                href={`https://app.apollo.io/#/people/${lead.apollo_person_id}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-600 hover:underline"
-                              >
-                                Apollo
                               </a>
                             ) : (
                               "—"

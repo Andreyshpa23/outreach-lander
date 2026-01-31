@@ -7,7 +7,7 @@ import { getJob, updateJob } from "./job-store";
 import { searchPeople, enrichPerson } from "./apollo-client";
 import type { ApolloPerson } from "./apollo-client";
 import { mapIcpToApolloFilters, getWideningSteps } from "./icp-to-apollo";
-import { normalizePerson, isLeadValid } from "./normalize";
+import { normalizePerson, isLeadValid, onlyLinkedInUrl } from "./normalize";
 import { buildCsv, getCsvFilename } from "./csv-export";
 import { uploadCsv, getPresignedDownloadUrl, isStorageConfigured } from "./storage";
 import { uploadDemoImportToS3 } from "@/lib/demo-import-storage";
@@ -121,15 +121,21 @@ export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJob
   }
 
   const finalLeads = leads.slice(0, targetLeads);
+  // Поиск Apollo бесплатен (находим людей). LinkedIn и полный профиль — только через enrich (тратит кредиты). Обязательно прогоняем всех без linkedin_url.
   const enrichLimit = Math.min(
     Math.max(0, parseInt(process.env.APOLLO_ENRICH_FOR_LINKEDIN_LIMIT ?? String(targetLeads), 10) || targetLeads),
     targetLeads
   );
-  if (enrichLimit > 0) {
-    const withoutLinkedIn = finalLeads.filter((l) => !l.linkedin_url?.trim());
+  const ENRICH_DELAY_MS = 150;
+  const deadlineForEnrich = deadline - 8000;
+  if (enrichLimit > 0 && Date.now() < deadlineForEnrich) {
+    const withoutLinkedIn = finalLeads.filter((l) => !onlyLinkedInUrl(l.linkedin_url));
     let enriched = 0;
+    let attempted = 0;
     for (const lead of withoutLinkedIn) {
-      if (enriched >= enrichLimit) break;
+      if (enriched >= enrichLimit || Date.now() >= deadlineForEnrich) break;
+      if (attempted > 0) await new Promise((r) => setTimeout(r, ENRICH_DELAY_MS));
+      attempted++;
       const parts = (lead.full_name ?? "").trim().split(/\s+/);
       const first_name = parts[0] ?? "";
       const last_name = parts.slice(1).join(" ") ?? "";
@@ -137,15 +143,23 @@ export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJob
       try {
         if (lead.company_website?.trim()) domain = new URL(lead.company_website.replace(/^\/+/, "https://")).hostname.replace(/^www\./, "");
       } catch {}
-      const result = await enrichPerson({ first_name, last_name, domain: domain || undefined });
+      const result = await enrichPerson({
+        first_name,
+        last_name,
+        domain: domain || undefined,
+        person_id: lead.apollo_person_id || undefined,
+      });
       if (result?.linkedin_url) {
         lead.linkedin_url = result.linkedin_url;
         enriched++;
       }
     }
-    if (enriched > 0) console.log("[leadgen] enriched", enriched, "leads with LinkedIn via People Enrichment");
+    if (enriched > 0) console.log("[leadgen] enriched", enriched, "of", attempted, "leads with LinkedIn via People Enrichment");
+    else if (withoutLinkedIn.length > 0) console.log("[leadgen] enrichment attempted", attempted, "leads, 0 LinkedIn URLs returned (check Apollo credits / people/match response)");
   }
-  const linkedin_urls = finalLeads.map((l) => l.linkedin_url).filter(Boolean);
+  const linkedin_urls = finalLeads
+    .map((l) => onlyLinkedInUrl(l.linkedin_url))
+    .filter(Boolean);
   console.log("[leadgen] done leads_count=" + finalLeads.length + " linkedin_urls=" + linkedin_urls.length + " apollo_requests=" + apolloRequests + " partial_due_to_timeout=" + partialDueToTimeout);
 
   let download_csv_url: string | null = null;
@@ -157,9 +171,13 @@ export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJob
       const csvBody = buildCsv(finalLeads);
       await uploadCsv(csvFilename, csvBody);
       download_csv_url = await getPresignedDownloadUrl(csvFilename);
+      console.log("[leadgen] CSV uploaded key=" + csvFilename + " rows=" + finalLeads.length);
     } catch (e) {
-      console.error("Leadgen CSV upload error:", e);
+      const errMsg = e instanceof Error ? e.message : String(e);
+      console.error("[leadgen] CSV upload failed:", errMsg, e);
     }
+  } else if (finalLeads.length > 0 && !isStorageConfigured()) {
+    console.warn("[leadgen] CSV not uploaded: MinIO not configured (MINIO_ENDPOINT, MINIO_BUCKET, MINIO_ACCESS_KEY, MINIO_SECRET_KEY)");
   }
 
   let minioError: string | undefined;
@@ -168,17 +186,16 @@ export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJob
   const shouldUpdateMinio =
     minioPayload?.product &&
     minioPayload?.segments?.length &&
-    (linkedin_urls.length > 0 || minioKeyToUpdate);
+    (finalLeads.length > 0 || minioKeyToUpdate);
   if (shouldUpdateMinio) {
     try {
-      console.log("[leadgen] MinIO update key=" + minioKeyToUpdate + " linkedin_urls=" + linkedin_urls.length);
+      console.log("[leadgen] MinIO update key=" + minioKeyToUpdate + " leads_detail=" + finalLeads.length + " linkedin_urls=" + linkedin_urls.length);
       const product = minioPayload!.product;
       const leads_detail = finalLeads.map((l) => ({
-        linkedin_url: l.linkedin_url,
+        linkedin_url: onlyLinkedInUrl(l.linkedin_url),
         full_name: l.full_name,
         title: l.title,
         company_name: l.company_name,
-        ...(l.apollo_person_id && !l.linkedin_url && { apollo_profile_url: `https://app.apollo.io/#/people/${l.apollo_person_id}` }),
       }));
       const payload = {
         product: {

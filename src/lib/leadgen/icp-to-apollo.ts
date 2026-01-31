@@ -50,12 +50,24 @@ function industryTagIdsOnlyIfNumeric(industries: string[]): string[] | undefined
   return numeric.length ? numeric : undefined;
 }
 
+/** Apollo API expects organization_num_employees as "1-10", "11-50" (hyphen), not "1,10". */
+function toApolloEmployeeRanges(ranges: string[]): string[] {
+  return ranges.map((r) => {
+    const s = String(r).trim();
+    if (s.includes("-")) return s;
+    if (s.includes(",")) return s.replace(",", "-");
+    if (/^\d+\+$/.test(s)) return s;
+    return s;
+  }).filter(Boolean);
+}
+
 export function mapIcpToApolloFilters(
   icp: Icp,
   wideningStep: WideningStep
 ): ApolloSearchFilters {
   const pos = icp.positions ?? {};
-  const companySize = icp.company_size?.employee_ranges ?? [];
+  const companySizeRaw = icp.company_size?.employee_ranges ?? [];
+  const companySize = toApolloEmployeeRanges(companySizeRaw);
   const industries = icp.industries ?? [];
   const industryTagIds = industryTagIdsOnlyIfNumeric(industries);
   const keywords = getKeywords(icp);

@@ -111,15 +111,17 @@ export async function searchPeople(
       const data = (await res.json()) as ApolloSearchResponse & { people?: ApolloPerson[]; data?: { people?: ApolloPerson[] }; contacts?: ApolloPerson[] };
       // Apollo may return people at top level, under data, or as contacts; иногда каждый элемент — { person: {...} } и linkedin_url на верхнем уровне
       const raw = data.people ?? (data as { data?: { people?: ApolloPerson[] } }).data?.people ?? (data as { contacts?: ApolloPerson[] }).contacts ?? [];
-      const people = (raw as (ApolloPerson & { person?: ApolloPerson; linkedin_url?: string })[]).map((p) => {
+      const LINKEDIN_KEYS = ["linkedin_url", "linkedin_profile_url", "linkedin", "linkedin_slug", "linkedin_id"];
+      const people = (raw as (ApolloPerson & { person?: ApolloPerson })[]).map((p) => {
         const inner = p && typeof p === "object" && p.person ? p.person : p;
-        const topLevelUrl = (p && typeof p === "object" && (p as Record<string, unknown>).linkedin_url) as string | undefined;
-        if (inner && typeof inner === "object" && topLevelUrl && typeof topLevelUrl === "string" && topLevelUrl.trim()) {
-          const cur = (inner as Record<string, unknown>).linkedin_url;
-          if (!cur || (typeof cur === "string" && !cur.trim()))
-            return { ...inner, linkedin_url: topLevelUrl.trim() } as ApolloPerson;
+        const top = p && typeof p === "object" ? (p as Record<string, unknown>) : {};
+        const merged = { ...inner } as Record<string, unknown>;
+        for (const k of LINKEDIN_KEYS) {
+          const v = top[k];
+          if (v != null && typeof v === "string" && v.trim() && (!merged[k] || !String(merged[k]).trim()))
+            merged[k] = v.trim();
         }
-        return inner as ApolloPerson;
+        return merged as ApolloPerson;
       });
       const pagination = data.pagination ?? (data as { data?: { pagination?: ApolloSearchResponse["pagination"] } }).data?.pagination;
       console.log("[apollo] page=" + page + " status=" + res.status + " people=" + people.length + " elapsed_ms=" + elapsed + " total_pages=" + (pagination?.total_pages ?? "?"));
@@ -144,15 +146,65 @@ export async function searchPeople(
   throw lastError ?? new Error("Apollo search failed after retries");
 }
 
+/** Из ответа Apollo (person) достаём только LinkedIn URL (linkedin.com, не apollo). */
+function linkedInFromPerson(person: Record<string, unknown> | null | undefined): string | null {
+  if (!person || typeof person !== "object") return null;
+  const url = (person.linkedin_url ?? person.linkedin_profile_url ?? person.linkedin) as string | undefined;
+  const u = String(url ?? "").trim();
+  if (u && u.includes("linkedin.com") && !/apollo/i.test(u)) return u;
+  const slug = (person.linkedin_slug ?? person.linkedin_id) as string | undefined;
+  const slugStr = typeof slug === "string" ? slug.trim() : "";
+  if (slugStr) return `https://www.linkedin.com/in/${slugStr.replace(/^\/+/, "")}`;
+  return null;
+}
+
 /**
- * People Enrichment — один человек по first_name, last_name, domain.
+ * Получить персону по Apollo id (GET /people/{id}). В поиске Apollo часто нет linkedin_url — по id возвращается полный профиль.
+ */
+export async function getPersonById(personId: string): Promise<{ linkedin_url?: string } | null> {
+  const apiKey = process.env.APOLLO_API_KEY;
+  if (!apiKey || !personId?.trim()) return null;
+  const id = personId.trim();
+  try {
+    const url = `${APOLLO_BASE}/people/${encodeURIComponent(id)}?api_key=${encodeURIComponent(apiKey)}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const res = await fetch(url, {
+      method: "GET",
+      headers: { "Cache-Control": "no-cache", "X-Api-Key": apiKey },
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!res.ok) {
+      if (res.status === 404) return null;
+      console.warn("[apollo] getPersonById not ok:", res.status, id);
+      return null;
+    }
+    const data = (await res.json()) as { person?: Record<string, unknown> };
+    const person = data.person;
+    const linkedin = linkedInFromPerson(person);
+    if (linkedin) return { linkedin_url: linkedin };
+    return null;
+  } catch (e) {
+    console.warn("[apollo] getPersonById error:", e instanceof Error ? e.message : String(e));
+    return null;
+  }
+}
+
+/**
+ * People Enrichment — один человек по first_name, last_name, domain (или по id через getPersonById).
  * Тратит кредиты Apollo. Возвращает linkedin_url если есть.
  */
 export async function enrichPerson(params: {
   first_name: string;
   last_name: string;
   domain?: string;
+  person_id?: string;
 }): Promise<{ linkedin_url?: string } | null> {
+  if (params.person_id?.trim()) {
+    const byId = await getPersonById(params.person_id.trim());
+    if (byId?.linkedin_url) return byId;
+  }
   const apiKey = process.env.APOLLO_API_KEY;
   if (!apiKey) return null;
   const body: Record<string, string> = {
@@ -162,17 +214,25 @@ export async function enrichPerson(params: {
   };
   if (params.domain?.trim()) body.domain = params.domain.trim();
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
     const res = await fetch(`${APOLLO_BASE}/people/match`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Cache-Control": "no-cache", "X-Api-Key": apiKey },
       body: JSON.stringify(body),
+      signal: controller.signal,
     });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { person?: { linkedin_url?: string } };
-    const url = data.person?.linkedin_url?.trim();
-    if (url && url.includes("linkedin.com")) return { linkedin_url: url };
+    clearTimeout(timeoutId);
+    if (!res.ok) {
+      console.warn("[apollo] enrich person not ok:", res.status, params.first_name, params.last_name);
+      return null;
+    }
+    const data = (await res.json()) as { person?: Record<string, unknown> };
+    const linkedin = linkedInFromPerson(data.person);
+    if (linkedin) return { linkedin_url: linkedin };
     return null;
-  } catch {
+  } catch (e) {
+    console.warn("[apollo] enrich person error:", e instanceof Error ? e.message : String(e));
     return null;
   }
 }

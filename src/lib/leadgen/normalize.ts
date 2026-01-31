@@ -1,12 +1,12 @@
 /**
  * Normalize Apollo person to Lead; quality check (title + company_name required).
- * LinkedIn URL берём из всех возможных полей ответа Apollo; если нет — fallback на профиль в Apollo (app.apollo.io/#/people/{id}).
+ * В linkedin_url попадают только реальные URL LinkedIn (linkedin.com). Apollo-ссылки не подставляем.
  */
 
 import type { Lead } from "./types";
 import type { ApolloPerson } from "./apollo-client";
 
-/** Возвращает только реальный URL LinkedIn (linkedin.com). Без fallback на Apollo — если Apollo не вернул LinkedIn, возвращаем "". */
+/** Только реальный URL LinkedIn (linkedin.com). Любой URL с apollo — не считаем LinkedIn, возвращаем "". */
 function extractLinkedInUrl(person: ApolloPerson & Record<string, unknown>): string {
   const raw = person as Record<string, unknown>;
   const v =
@@ -19,7 +19,7 @@ function extractLinkedInUrl(person: ApolloPerson & Record<string, unknown>): str
   let s = String(v ?? "").trim();
   if (s) {
     if (!s.startsWith("http")) s = s.startsWith("linkedin.com") ? `https://${s}` : `https://www.linkedin.com/in/${s.replace(/^\/+/, "")}`;
-    if (s.includes("linkedin.com")) return s;
+    if (s.includes("linkedin.com") && !/apollo/i.test(s)) return s;
     return "";
   }
   const slug = raw.linkedin_slug ?? raw.linkedin_id;
@@ -28,6 +28,13 @@ function extractLinkedInUrl(person: ApolloPerson & Record<string, unknown>): str
     return clean ? `https://www.linkedin.com/in/${clean}` : "";
   }
   return "";
+}
+
+/** Для выгрузки: только ссылки на linkedin.com, без apollo. Пустая строка иначе. */
+export function onlyLinkedInUrl(url: string | undefined): string {
+  const u = String(url ?? "").trim();
+  if (!u || !u.includes("linkedin.com") || /apollo/i.test(u)) return "";
+  return u;
 }
 
 export function normalizePerson(person: ApolloPerson): Lead {
