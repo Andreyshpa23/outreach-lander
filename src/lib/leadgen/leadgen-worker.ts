@@ -6,7 +6,7 @@
 
 import type { LeadgenJobInput, Lead, Icp, WideningStep } from "./types";
 import { getJob, updateJob } from "./job-store";
-import { searchPeople, enrichPerson } from "./apollo-client";
+import { searchPeople, enrichPerson, getPersonById } from "./apollo-client";
 import type { ApolloPerson, ApolloSearchFilters } from "./apollo-client";
 import { mapIcpToApolloFilters, getWideningSteps } from "./icp-to-apollo";
 import { normalizePerson, isLeadValid, onlyLinkedInUrl } from "./normalize";
@@ -218,14 +218,33 @@ async function runSearchForIcp(
   );
   const ENRICH_DELAY_MS = 150;
   const deadlineForEnrich = deadline - 8000;
+  
+  // Enrich leads without LinkedIn URL: try getPersonById first (faster), then enrichPerson
   if (enrichLimit > 0 && Date.now() < deadlineForEnrich) {
     const withoutLinkedIn = finalLeads.filter((l) => !onlyLinkedInUrl(l.linkedin_url));
     let enriched = 0;
     let attempted = 0;
+    
     for (const lead of withoutLinkedIn) {
       if (enriched >= enrichLimit || Date.now() >= deadlineForEnrich) break;
       if (attempted > 0) await new Promise((r) => setTimeout(r, ENRICH_DELAY_MS));
       attempted++;
+      
+      // First try: getPersonById (faster, if we have apollo_person_id)
+      if (lead.apollo_person_id) {
+        try {
+          const byIdResult = await getPersonById(lead.apollo_person_id);
+          if (byIdResult?.linkedin_url) {
+            lead.linkedin_url = byIdResult.linkedin_url;
+            enriched++;
+            continue;
+          }
+        } catch (e) {
+          // Fall through to enrichPerson
+        }
+      }
+      
+      // Second try: enrichPerson (slower, needs name/domain)
       const parts = (lead.full_name ?? "").trim().split(/\s+/);
       const first_name = parts[0] ?? "";
       const last_name = parts.slice(1).join(" ") ?? "";
@@ -233,20 +252,36 @@ async function runSearchForIcp(
       try {
         if (lead.company_website?.trim()) domain = new URL(lead.company_website.replace(/^\/+/, "https://")).hostname.replace(/^www\./, "");
       } catch {}
-      const result = await enrichPerson({
-        first_name,
-        last_name,
-        domain: domain || undefined,
-        person_id: lead.apollo_person_id || undefined,
-      });
-      if (result?.linkedin_url) {
-        lead.linkedin_url = result.linkedin_url;
-        enriched++;
+      
+      if (first_name && last_name) {
+        const result = await enrichPerson({
+          first_name,
+          last_name,
+          domain: domain || undefined,
+          person_id: lead.apollo_person_id || undefined,
+        });
+        if (result?.linkedin_url) {
+          lead.linkedin_url = result.linkedin_url;
+          enriched++;
+        }
       }
     }
     if (segmentLabel && enriched > 0) console.log("[leadgen] segment=" + segmentLabel + " enriched " + enriched + " with LinkedIn");
   }
-  const linkedin_urls = finalLeads.map((l) => onlyLinkedInUrl(l.linkedin_url)).filter(Boolean);
+  
+  // Extract LinkedIn URLs: use linkedin_url if available, otherwise try to construct from apollo_person_id
+  const linkedin_urls = finalLeads.map((l) => {
+    const url = onlyLinkedInUrl(l.linkedin_url);
+    if (url) return url;
+    // If no linkedin_url but we have apollo_person_id, we could try to get it, but for now just skip
+    // The enrichment above should have handled this
+    return "";
+  }).filter(Boolean);
+  
+  // Log if we have leads but no LinkedIn URLs
+  if (finalLeads.length > 0 && linkedin_urls.length === 0) {
+    console.warn(`[leadgen] ⚠️ WARNING: ${finalLeads.length} leads collected but 0 LinkedIn URLs. Enrichment may have failed or timed out.`);
+  }
   return { linkedin_urls, leads: finalLeads, apolloRequests, wideningStepsApplied, partialDueToTimeout };
 }
 
