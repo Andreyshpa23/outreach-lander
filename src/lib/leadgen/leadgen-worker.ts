@@ -50,6 +50,7 @@ export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJob
 
   for (const step of steps) {
     if (Date.now() >= deadline) {
+      console.log("[leadgen] deadline reached, stopping. leads=" + leads.length + " apollo_requests=" + apolloRequests);
       partialDueToTimeout = true;
       break;
     }
@@ -121,7 +122,7 @@ export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJob
 
   const finalLeads = leads.slice(0, targetLeads);
   const linkedin_urls = finalLeads.map((l) => l.linkedin_url).filter(Boolean);
-  console.log("[leadgen] done leads_count=" + finalLeads.length + " apollo_requests=" + apolloRequests);
+  console.log("[leadgen] done leads_count=" + finalLeads.length + " apollo_requests=" + apolloRequests + " partial_due_to_timeout=" + partialDueToTimeout);
 
   let download_csv_url: string | null = null;
   let minio_object_key: string | null = null;

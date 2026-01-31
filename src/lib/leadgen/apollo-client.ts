@@ -6,6 +6,7 @@
 const APOLLO_BASE = "https://api.apollo.io/api/v1";
 const MAX_RETRIES = 3;
 const INITIAL_BACKOFF_MS = 1000;
+const REQUEST_TIMEOUT_MS = 20000;
 
 export interface ApolloSearchFilters {
   person_titles?: string[];
@@ -79,6 +80,9 @@ export async function searchPeople(
   let lastError: Error | null = null;
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
+      const start = Date.now();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
       const res = await fetch(`${APOLLO_BASE}/mixed_people/api_search`, {
         method: "POST",
         headers: {
@@ -87,7 +91,10 @@ export async function searchPeople(
           "X-Api-Key": apiKey,
         },
         body: JSON.stringify(body),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
+      const elapsed = Date.now() - start;
 
       if (res.status === 429 || res.status >= 500) {
         const backoff = INITIAL_BACKOFF_MS * Math.pow(2, attempt);
@@ -106,9 +113,11 @@ export async function searchPeople(
       const raw = data.people ?? (data as { data?: { people?: ApolloPerson[] } }).data?.people ?? (data as { contacts?: ApolloPerson[] }).contacts ?? [];
       const people = (raw as (ApolloPerson & { person?: ApolloPerson })[]).map((p) => (p && typeof p === "object" && p.person ? p.person : p)) as ApolloPerson[];
       const pagination = data.pagination ?? (data as { data?: { pagination?: ApolloSearchResponse["pagination"] } }).data?.pagination;
+      console.log("[apollo] page=" + page + " status=" + res.status + " people=" + people.length + " elapsed_ms=" + elapsed + " total_pages=" + (pagination?.total_pages ?? "?"));
       return { people, pagination } as ApolloSearchResponse;
     } catch (e) {
       lastError = e instanceof Error ? e : new Error(String(e));
+      console.log("[apollo] attempt=" + (attempt + 1) + " error=" + (lastError?.message ?? String(e)));
       if (attempt < MAX_RETRIES - 1) {
         const backoff = INITIAL_BACKOFF_MS * Math.pow(2, attempt);
         await sleep(backoff);
