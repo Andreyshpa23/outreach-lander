@@ -2030,25 +2030,64 @@ export default function Page() {
                     </div>
                   )}
 
-                  {/* Segment Switcher */}
-                  {apiData.segments.length > 1 && (
-                    <div className="flex justify-center gap-2">
-              {apiData.segments.map((seg: any, i: number) => (
-                        <button
-                          key={i}
-                          onClick={() => setSelectedSegmentIndex(i)}
-                          className={[
-                            "rounded-full px-4 py-2 text-sm font-medium transition-all",
-                            selectedSegmentIndex === i
-                              ? "bg-zinc-900 text-white shadow-md"
-                              : "bg-white/70 text-zinc-600 hover:bg-white/90"
-                          ].join(" ")}
-                        >
-                          {segmentEmoji(seg.name)} {seg.name}
-                        </button>
-                      ))}
+                  {/* Segment Switcher with Filters */}
+                  {apiData.segments.length > 0 && (
+                    <div className="space-y-4">
+                      {/* Segment tabs */}
+                      {apiData.segments.length > 1 && (
+                        <div className="flex justify-center gap-2">
+                          {apiData.segments.map((seg: any, i: number) => (
+                            <button
+                              key={i}
+                              onClick={() => setSelectedSegmentIndex(i)}
+                              className={[
+                                "rounded-full px-4 py-2 text-sm font-medium transition-all",
+                                selectedSegmentIndex === i
+                                  ? "bg-zinc-900 text-white shadow-md"
+                                  : "bg-white/70 text-zinc-600 hover:bg-white/90"
+                              ].join(" ")}
+                            >
+                              {segmentEmoji(seg.name)} {seg.name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Filter input for current segment - always visible */}
+                      {typed[selectedSegmentIndex] && (
+                        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200 shadow-sm">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-lg">{segmentEmoji(apiData.segments[selectedSegmentIndex]?.name)}</span>
+                            <span className="font-semibold text-zinc-800">
+                              {apiData.segments[selectedSegmentIndex]?.name || "Segment"} — Search Filters
+                            </span>
+                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                              Segment {selectedSegmentIndex + 1} of {apiData.segments.length}
+                            </span>
+                          </div>
+                          <input
+                            type="text"
+                            value={typed[selectedSegmentIndex]?.filters || ""}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setTyped((prev) => {
+                                const next = [...prev];
+                                if (next[selectedSegmentIndex]) {
+                                  next[selectedSegmentIndex] = { ...next[selectedSegmentIndex], filters: val };
+                                }
+                                return next;
+                              });
+                            }}
+                            placeholder="e.g. CEO, CTO, Head of Sales, VP Engineering, Founder"
+                            className="w-full rounded-lg border border-blue-300 bg-white px-4 py-3 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 shadow-sm"
+                          />
+                          <p className="mt-2 text-xs text-zinc-600">
+                            🎯 Enter job titles and keywords to find leads for this segment (comma-separated). Each segment searches for different people.
+                          </p>
+                        </div>
+                      )}
                     </div>
-        )}
+                  )}
 
                   {/* Active Segment - Chat Interface */}
                   {currentSegment && currentTyped && (
@@ -2064,39 +2103,13 @@ export default function Page() {
                             <Badge variant="secondary" className="bg-zinc-100 text-zinc-700">Segment</Badge>
       </div>
 
-                          {/* Editable Filters for this segment */}
-                          <div className="mb-4 space-y-3">
-                            <div>
-                              <label className="block text-xs font-medium text-zinc-700 mb-1">
-                                🎯 Search filters for "{currentSegment.name}"
-                              </label>
-                              <input
-                                type="text"
-                                value={currentTyped.filters || ""}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  setTyped((prev) => {
-                                    const next = [...prev];
-                                    if (next[selectedSegmentIndex]) {
-                                      next[selectedSegmentIndex] = { ...next[selectedSegmentIndex], filters: val };
-                                    }
-                                    return next;
-                                  });
-                                }}
-                                placeholder="e.g. CEO, CTO, Head of Sales, VP Engineering"
-                                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                              />
-                              <p className="mt-1 text-xs text-zinc-500">
-                                Job titles and keywords to find leads in this segment (comma-separated)
-                              </p>
+                          {/* Personalization hint */}
+                          {currentTyped.personalization && (
+                            <div className="mb-4 rounded-lg border border-zinc-200 bg-zinc-50/50 p-2 text-xs">
+                              <span className="font-medium text-zinc-700">💡 Personalization: </span>
+                              <span className="text-zinc-600">{currentTyped.personalization.substring(0, 150)}{currentTyped.personalization.length > 150 ? '...' : ''}</span>
                             </div>
-                            {currentTyped.personalization && (
-                              <div className="rounded-lg border border-zinc-200 bg-zinc-50/50 p-2 text-xs">
-                                <span className="font-medium text-zinc-700">Personalization: </span>
-                                <span className="text-zinc-600">{currentTyped.personalization.substring(0, 120)}{currentTyped.personalization.length > 120 ? '...' : ''}</span>
-                              </div>
-                            )}
-                          </div>
+                          )}
 
                           {/* Chat Messages - Only one active at a time */}
                           <div className="flex-1 overflow-y-auto space-y-4 mb-6">
