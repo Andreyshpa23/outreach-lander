@@ -125,10 +125,15 @@ export async function POST(req: Request) {
         ? `https://${process.env.VERCEL_URL}`
         : process.env.NEXT_PUBLIC_APP_URL ?? (host ? `${proto}://${host}` : "http://localhost:3000");
 
-    fetch(`${origin}/api/leadgen/run`, {
+    const runUrl = `${origin}/api/leadgen/run`;
+    console.log("[launch-outreach] triggering leadgen run url=" + runUrl + " job_id=" + job_id);
+    fetch(runUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ job_id, input }),
+    }).then((r) => {
+      console.log("[launch-outreach] leadgen run response status=" + r.status);
+      if (!r.ok) r.text().then((t) => console.error("[launch-outreach] leadgen run body", t));
     }).catch((err) => console.error("Launch outreach: leadgen run trigger error:", err));
 
     const res = NextResponse.json({ success: true, key: objectKey });

@@ -30,7 +30,11 @@ export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJob
   if (!inputOverride) {
     updateJob(jobId, { status: "running" });
   }
-  const icp = input.icp;
+  let icp = input.icp;
+  if (Object.keys(icp).length === 0 && (input as LeadgenJobInput).minio_payload?.product?.name) {
+    icp = { ...icp, industry_keywords: [(input as LeadgenJobInput).minio_payload!.product.name] };
+    console.log("[leadgen] empty ICP, fallback q_keywords from product name");
+  }
   const targetLeads = input.limits?.target_leads ?? TARGET_LEADS_DEFAULT;
   const maxRuntimeMs = input.limits?.max_runtime_ms ?? MAX_RUNTIME_MS_DEFAULT;
   const deadline = Date.now() + maxRuntimeMs;
@@ -42,6 +46,7 @@ export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJob
   let partialDueToTimeout = false;
 
   const steps = getWideningSteps();
+  console.log("[leadgen] job_id=" + jobId + " icp_keys=" + JSON.stringify(Object.keys(icp)) + " minio_key_to_update=" + (input as LeadgenJobInput).minio_key_to_update);
 
   for (const step of steps) {
     if (Date.now() >= deadline) {
@@ -51,15 +56,19 @@ export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJob
     if (leads.length >= targetLeads) break;
 
     const filters = mapIcpToApolloFilters(icp, step as WideningStep);
-    const hasFilters = Object.keys(filters).some(
-      (k) => Array.isArray((filters as Record<string, unknown>)[k]) && ((filters as Record<string, unknown>)[k] as unknown[]).length > 0
-    );
+    const hasFilters = Object.keys(filters).some((k) => {
+      const v = (filters as Record<string, unknown>)[k];
+      if (Array.isArray(v)) return v.length > 0;
+      if (typeof v === "string") return v.trim().length > 0;
+      return false;
+    });
     if (!hasFilters && step === "strict") {
       wideningStepsApplied.push("strict");
       continue;
     }
 
     wideningStepsApplied.push(step);
+    console.log("[leadgen] step=" + step + " filters=" + JSON.stringify(Object.keys(filters)));
     let page = 1;
     let hasMore = true;
 
@@ -112,6 +121,8 @@ export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJob
 
   const finalLeads = leads.slice(0, targetLeads);
   const linkedin_urls = finalLeads.map((l) => l.linkedin_url).filter(Boolean);
+  console.log("[leadgen] done leads_count=" + finalLeads.length + " apollo_requests=" + apolloRequests);
+
   let download_csv_url: string | null = null;
   let minio_object_key: string | null = null;
 
@@ -135,6 +146,7 @@ export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJob
     (linkedin_urls.length > 0 || minioKeyToUpdate);
   if (shouldUpdateMinio) {
     try {
+      console.log("[leadgen] MinIO update key=" + minioKeyToUpdate + " linkedin_urls=" + linkedin_urls.length);
       const product = minioPayload!.product;
       const leads_detail = finalLeads.map((l) => ({
         linkedin_url: l.linkedin_url,
@@ -160,6 +172,7 @@ export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJob
       };
       const { objectKey } = await uploadDemoImportToS3(payload, minioKeyToUpdate);
       minio_object_key = objectKey;
+      console.log("[leadgen] MinIO updated objectKey=" + objectKey);
     } catch (e) {
       const errMsg = e instanceof Error ? e.message : String(e);
       minioError = errMsg;
