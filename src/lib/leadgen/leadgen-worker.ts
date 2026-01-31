@@ -122,8 +122,8 @@ export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJob
 
   const finalLeads = leads.slice(0, targetLeads);
   const enrichLimit = Math.min(
-    Math.max(0, parseInt(process.env.APOLLO_ENRICH_FOR_LINKEDIN_LIMIT ?? "0", 10) || 0),
-    25
+    Math.max(0, parseInt(process.env.APOLLO_ENRICH_FOR_LINKEDIN_LIMIT ?? String(targetLeads), 10) || targetLeads),
+    targetLeads
   );
   if (enrichLimit > 0) {
     const withoutLinkedIn = finalLeads.filter((l) => !l.linkedin_url?.trim());

@@ -112,7 +112,7 @@ export async function POST(req: Request) {
     const input: LeadgenJobInput = {
       job_id,
       icp,
-      limits: { target_leads: 50, max_runtime_ms: 55000 },
+      limits: { target_leads: 100, max_runtime_ms: 55000 },
       minio_payload,
       minio_key_to_update: objectKey,
     };
