@@ -18,7 +18,7 @@ export async function uploadCsv(
 ): Promise<void> {
   const minio = getMinioClient();
   if (!minio) {
-    throw new Error("MinIO не настроен. Задай MINIO_ENDPOINT (порт 9000), MINIO_BUCKET, MINIO_ACCESS_KEY, MINIO_SECRET_KEY в .env.local");
+    throw new Error("MinIO не настроен. Задай MINIO_ENDPOINT (порт 9000), MINIO_BUCKET, MINIO_ACCESS_KEY, MINIO_SECRET_KEY в Vercel → Settings → Environment Variables (локально: .env.local)");
   }
   const prefix = getLeadgenCsvPrefix();
   const key = prefix ? `${prefix}/${objectKey}` : objectKey;
@@ -35,7 +35,7 @@ export async function uploadCsv(
 export async function getPresignedDownloadUrl(objectKey: string): Promise<string> {
   const minio = getMinioClient();
   if (!minio) {
-    throw new Error("MinIO не настроен. Задай MINIO_ENDPOINT (порт 9000), MINIO_BUCKET, MINIO_ACCESS_KEY, MINIO_SECRET_KEY в .env.local");
+    throw new Error("MinIO не настроен. Задай MINIO_ENDPOINT (порт 9000), MINIO_BUCKET, MINIO_ACCESS_KEY, MINIO_SECRET_KEY в Vercel → Settings → Environment Variables (локально: .env.local)");
   }
   const prefix = getLeadgenCsvPrefix();
   const key = prefix ? `${prefix}/${objectKey}` : objectKey;

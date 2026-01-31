@@ -1,5 +1,28 @@
 # 🔒 Настройка Environment Variables
 
+## ✅ Чеклист для Vercel (demo.salestrigger.io)
+
+**Добавь все переменные в Vercel:** [vercel.com](https://vercel.com) → твой проект → **Settings → Environment Variables**.  
+После добавления: **Deployments → … → Redeploy**.
+
+| Переменная | Обязательно | Назначение |
+|------------|-------------|------------|
+| `AZURE_OPENAI_ENDPOINT` | да | Azure OpenAI endpoint |
+| `AZURE_OPENAI_API_KEY` | да | Azure OpenAI API key |
+| `AZURE_OPENAI_DEPLOYMENT` | да | Имя deployment |
+| `MINIO_ENDPOINT` | да | MinIO API, порт **9000**, без слеша в конце. Пример: `http://92.118.114.94:9000` |
+| `MINIO_BUCKET` | да | Имя бакета (создай в MinIO Console) |
+| `MINIO_ACCESS_KEY` | да | Access Key (MinIO Console → Identity → Access Keys) |
+| `MINIO_SECRET_KEY` | да | Secret Key (логин/пароль MinIO) |
+| `APOLLO_API_KEY` | да | Master API Key Apollo (сбор лидов) |
+| `DAILY_REQUEST_LIMIT` | нет | Лимит запросов в день (0 = без лимита) |
+| `AUTH_EMAIL` | по желанию | Email для авторизации в модалке (если проверка по env реализована) |
+| `AUTH_PASSWORD` | по желанию | Пароль для авторизации в модалке |
+
+Без **MINIO_*** при нажатии «Launch outreach» будет ошибка «MinIO не настроен» — добавь все четыре переменные MinIO в Vercel.
+
+---
+
 ## Для ограничения использования токенов
 
 Добавьте в Vercel (Settings → Environment Variables):

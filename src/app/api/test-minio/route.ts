@@ -15,7 +15,7 @@ export async function GET() {
       {
         success: false,
         error: "MinIO env not set",
-        hint: "Задай MINIO_ENDPOINT (порт 9000, без слеша), MINIO_BUCKET, MINIO_ACCESS_KEY, MINIO_SECRET_KEY в .env.local",
+        hint: "Задай MINIO_ENDPOINT (порт 9000, без слеша), MINIO_BUCKET, MINIO_ACCESS_KEY, MINIO_SECRET_KEY в Vercel → Settings → Environment Variables (локально: .env.local)",
       },
       { status: 503 }
     );

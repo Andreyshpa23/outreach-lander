@@ -127,7 +127,7 @@ export async function uploadDemoImportToS3(
   const minio = getMinioClient();
   if (!minio) {
     throw new Error(
-      "MinIO не настроен. Задай MINIO_ENDPOINT (порт 9000), MINIO_BUCKET, MINIO_ACCESS_KEY, MINIO_SECRET_KEY в .env.local"
+      "MinIO не настроен. Задай MINIO_ENDPOINT (порт 9000), MINIO_BUCKET, MINIO_ACCESS_KEY, MINIO_SECRET_KEY в Vercel → Settings → Environment Variables (локально: .env.local)"
     );
   }
 
