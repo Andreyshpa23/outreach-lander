@@ -7,9 +7,25 @@
 import type { LeadgenJobInput, Lead, Icp, WideningStep } from "./types";
 import { getJob, updateJob } from "./job-store";
 import { searchPeople, enrichPerson } from "./apollo-client";
-import type { ApolloPerson } from "./apollo-client";
+import type { ApolloPerson, ApolloSearchFilters } from "./apollo-client";
 import { mapIcpToApolloFilters, getWideningSteps } from "./icp-to-apollo";
 import { normalizePerson, isLeadValid, onlyLinkedInUrl } from "./normalize";
+
+// Helper to get keywords from ICP (duplicated from icp-to-apollo for fallback)
+function getKeywords(icp: Icp): string[] {
+  const kw = icp.industry_keywords ?? [];
+  const ind = icp.industries ?? [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const s of [...kw, ...ind]) {
+    const t = String(s).trim();
+    if (t && !seen.has(t.toLowerCase())) {
+      seen.add(t.toLowerCase());
+      out.push(t);
+    }
+  }
+  return out;
+}
 import { buildCsv, getCsvFilename } from "./csv-export";
 import { uploadCsv, getPresignedDownloadUrl, isStorageConfigured } from "./storage";
 import { uploadDemoImportToS3 } from "@/lib/demo-import-storage";
@@ -117,6 +133,63 @@ async function runSearchForIcp(
       }
     }
     if (leads.length >= targetLeads) break;
+  }
+
+  // If no leads found after all widening steps, try minimal filters as last resort
+  if (leads.length === 0 && Date.now() < deadline - 2000) {
+    console.log(`[leadgen] No leads after all widening steps, trying minimal filters as fallback`);
+    const minimalFilters: ApolloSearchFilters = {};
+    
+    // Try only titles first
+    if (resolvedIcp.positions?.titles_strict?.length) {
+      minimalFilters.person_titles = resolvedIcp.positions.titles_strict;
+      console.log(`[leadgen] Fallback: trying only titles:`, minimalFilters.person_titles);
+      try {
+        const res = await searchPeople(minimalFilters, 1, PER_PAGE);
+        const people = (res.people ?? []) as ApolloPerson[];
+        console.log(`[leadgen] Fallback (titles only): found ${people.length} people`);
+        if (people.length > 0) {
+          for (const person of people) {
+            const lead = normalizePerson(person);
+            if (!isLeadValid(lead)) continue;
+            const dedupeKey = lead.linkedin_url || lead.apollo_person_id;
+            if (!dedupeKey || seen.has(dedupeKey)) continue;
+            seen.add(dedupeKey);
+            leads.push(lead);
+            if (leads.length >= targetLeads) break;
+          }
+        }
+      } catch (e) {
+        console.warn(`[leadgen] Fallback (titles only) failed:`, e);
+      }
+    }
+    
+    // If still no leads, try only keywords
+    if (leads.length === 0 && Date.now() < deadline - 2000) {
+      const keywords = getKeywords(resolvedIcp);
+      if (keywords.length > 0) {
+        const keywordFilters: ApolloSearchFilters = { q_keywords: keywords.join(", ") };
+        console.log(`[leadgen] Fallback: trying only keywords:`, keywordFilters.q_keywords);
+        try {
+          const res = await searchPeople(keywordFilters, 1, PER_PAGE);
+          const people = (res.people ?? []) as ApolloPerson[];
+          console.log(`[leadgen] Fallback (keywords only): found ${people.length} people`);
+          if (people.length > 0) {
+            for (const person of people) {
+              const lead = normalizePerson(person);
+              if (!isLeadValid(lead)) continue;
+              const dedupeKey = lead.linkedin_url || lead.apollo_person_id;
+              if (!dedupeKey || seen.has(dedupeKey)) continue;
+              seen.add(dedupeKey);
+              leads.push(lead);
+              if (leads.length >= targetLeads) break;
+            }
+          }
+        } catch (e) {
+          console.warn(`[leadgen] Fallback (keywords only) failed:`, e);
+        }
+      }
+    }
   }
 
   const finalLeads = leads.slice(0, targetLeads);
