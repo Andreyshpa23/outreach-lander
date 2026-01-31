@@ -43,6 +43,7 @@ uploads/
 
 # vercel
 .vercel
+vercel-env-paste.txt
 
 # typescript
 *.tsbuildinfo
