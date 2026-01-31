@@ -216,17 +216,23 @@ async function runSearchForIcp(
     Math.max(0, parseInt(process.env.APOLLO_ENRICH_FOR_LINKEDIN_LIMIT ?? String(targetLeads), 10) || targetLeads),
     targetLeads
   );
-  const ENRICH_DELAY_MS = 150;
-  const deadlineForEnrich = deadline - 8000;
+  const ENRICH_DELAY_MS = 100; // Reduced delay for faster enrichment
+  const deadlineForEnrich = deadline - 3000; // More time for enrichment (was 8000ms reserve, now 3000ms)
   
   // Enrich leads without LinkedIn URL: try getPersonById first (faster), then enrichPerson
-  if (enrichLimit > 0 && Date.now() < deadlineForEnrich) {
-    const withoutLinkedIn = finalLeads.filter((l) => !onlyLinkedInUrl(l.linkedin_url));
+  const withoutLinkedIn = finalLeads.filter((l) => !onlyLinkedInUrl(l.linkedin_url));
+  console.log(`[leadgen] Enrichment: ${withoutLinkedIn.length}/${finalLeads.length} leads need LinkedIn URL enrichment`);
+  
+  if (enrichLimit > 0 && withoutLinkedIn.length > 0 && Date.now() < deadlineForEnrich) {
     let enriched = 0;
     let attempted = 0;
+    const enrichStart = Date.now();
     
     for (const lead of withoutLinkedIn) {
-      if (enriched >= enrichLimit || Date.now() >= deadlineForEnrich) break;
+      if (enriched >= enrichLimit || Date.now() >= deadlineForEnrich) {
+        console.log(`[leadgen] Enrichment stopped: enriched=${enriched}, attempted=${attempted}, time_left=${deadlineForEnrich - Date.now()}ms`);
+        break;
+      }
       if (attempted > 0) await new Promise((r) => setTimeout(r, ENRICH_DELAY_MS));
       attempted++;
       
@@ -254,33 +260,38 @@ async function runSearchForIcp(
       } catch {}
       
       if (first_name && last_name) {
-        const result = await enrichPerson({
-          first_name,
-          last_name,
-          domain: domain || undefined,
-          person_id: lead.apollo_person_id || undefined,
-        });
-        if (result?.linkedin_url) {
-          lead.linkedin_url = result.linkedin_url;
-          enriched++;
+        try {
+          const result = await enrichPerson({
+            first_name,
+            last_name,
+            domain: domain || undefined,
+            person_id: lead.apollo_person_id || undefined,
+          });
+          if (result?.linkedin_url) {
+            lead.linkedin_url = result.linkedin_url;
+            enriched++;
+          }
+        } catch (e) {
+          console.warn(`[leadgen] Enrichment failed for ${first_name} ${last_name}:`, e instanceof Error ? e.message : String(e));
         }
       }
     }
+    
+    const enrichElapsed = Date.now() - enrichStart;
+    console.log(`[leadgen] Enrichment completed: ${enriched}/${attempted} enriched in ${enrichElapsed}ms`);
     if (segmentLabel && enriched > 0) console.log("[leadgen] segment=" + segmentLabel + " enriched " + enriched + " with LinkedIn");
   }
   
-  // Extract LinkedIn URLs: use linkedin_url if available, otherwise try to construct from apollo_person_id
-  const linkedin_urls = finalLeads.map((l) => {
-    const url = onlyLinkedInUrl(l.linkedin_url);
-    if (url) return url;
-    // If no linkedin_url but we have apollo_person_id, we could try to get it, but for now just skip
-    // The enrichment above should have handled this
-    return "";
-  }).filter(Boolean);
+  // Extract LinkedIn URLs: use linkedin_url if available
+  const linkedin_urls = finalLeads.map((l) => onlyLinkedInUrl(l.linkedin_url)).filter(Boolean);
   
   // Log if we have leads but no LinkedIn URLs
   if (finalLeads.length > 0 && linkedin_urls.length === 0) {
-    console.warn(`[leadgen] ⚠️ WARNING: ${finalLeads.length} leads collected but 0 LinkedIn URLs. Enrichment may have failed or timed out.`);
+    console.error(`[leadgen] ❌ CRITICAL: ${finalLeads.length} leads collected but 0 LinkedIn URLs after enrichment!`);
+    console.error(`[leadgen]   Leads have apollo_person_id: ${finalLeads.filter(l => l.apollo_person_id).length}/${finalLeads.length}`);
+    console.error(`[leadgen]   Leads have linkedin_url (raw): ${finalLeads.filter(l => l.linkedin_url && l.linkedin_url.trim()).length}/${finalLeads.length}`);
+  } else if (linkedin_urls.length > 0) {
+    console.log(`[leadgen] ✅ Successfully extracted ${linkedin_urls.length} LinkedIn URLs from ${finalLeads.length} leads`);
   }
   return { linkedin_urls, leads: finalLeads, apolloRequests, wideningStepsApplied, partialDueToTimeout };
 }
