@@ -136,36 +136,49 @@ async function runSearchForIcp(
   }
 
   // If no leads found after all widening steps, try minimal filters as last resort
-  if (leads.length === 0 && Date.now() < deadline - 2000) {
-    console.log(`[leadgen] No leads after all widening steps, trying minimal filters as fallback`);
-    const minimalFilters: ApolloSearchFilters = {};
+  if (leads.length === 0 && Date.now() < deadline - 1000) {
+    console.log(`[leadgen] ⚠️ No leads after all widening steps (${wideningStepsApplied.length} steps), trying minimal filters as fallback`);
+    const fallbackDeadline = deadline - 500; // Reserve 500ms for processing
     
-    // Try only titles first
-    if (resolvedIcp.positions?.titles_strict?.length) {
-      minimalFilters.person_titles = resolvedIcp.positions.titles_strict;
+    // Try only titles first - collect multiple pages if needed
+    if (resolvedIcp.positions?.titles_strict?.length && Date.now() < fallbackDeadline) {
+      const minimalFilters: ApolloSearchFilters = { person_titles: resolvedIcp.positions.titles_strict };
       console.log(`[leadgen] Fallback: trying only titles:`, minimalFilters.person_titles);
       try {
-        const res = await searchPeople(minimalFilters, 1, PER_PAGE);
-        const people = (res.people ?? []) as ApolloPerson[];
-        console.log(`[leadgen] Fallback (titles only): found ${people.length} people`);
-        if (people.length > 0) {
-          for (const person of people) {
-            const lead = normalizePerson(person);
-            if (!isLeadValid(lead)) continue;
-            const dedupeKey = lead.linkedin_url || lead.apollo_person_id;
-            if (!dedupeKey || seen.has(dedupeKey)) continue;
-            seen.add(dedupeKey);
-            leads.push(lead);
-            if (leads.length >= targetLeads) break;
+        let fallbackPage = 1;
+        let hasMoreFallback = true;
+        while (hasMoreFallback && leads.length < targetLeads && Date.now() < fallbackDeadline) {
+          const res = await searchPeople(minimalFilters, fallbackPage, PER_PAGE);
+          const people = (res.people ?? []) as ApolloPerson[];
+          const totalPages = (res.pagination as { total_pages?: number })?.total_pages ?? 1;
+          console.log(`[leadgen] Fallback (titles only) page=${fallbackPage}: found ${people.length} people, total_pages=${totalPages}`);
+          
+          if (people.length > 0) {
+            for (const person of people) {
+              const lead = normalizePerson(person);
+              if (!isLeadValid(lead)) continue;
+              const dedupeKey = lead.linkedin_url || lead.apollo_person_id;
+              if (!dedupeKey || seen.has(dedupeKey)) continue;
+              seen.add(dedupeKey);
+              leads.push(lead);
+              if (leads.length >= targetLeads) break;
+            }
+          }
+          
+          if (fallbackPage >= totalPages || people.length < PER_PAGE || leads.length >= targetLeads) {
+            hasMoreFallback = false;
+          } else {
+            fallbackPage++;
           }
         }
+        console.log(`[leadgen] Fallback (titles only) completed: collected ${leads.length} leads`);
       } catch (e) {
         console.warn(`[leadgen] Fallback (titles only) failed:`, e);
       }
     }
     
     // If still no leads, try only keywords
-    if (leads.length === 0 && Date.now() < deadline - 2000) {
+    if (leads.length === 0 && Date.now() < fallbackDeadline) {
       const keywords = getKeywordsFromIcp(resolvedIcp);
       if (keywords.length > 0) {
         const keywordFilters: ApolloSearchFilters = { q_keywords: keywords.join(", ") };
@@ -189,6 +202,12 @@ async function runSearchForIcp(
           console.warn(`[leadgen] Fallback (keywords only) failed:`, e);
         }
       }
+    }
+    
+    if (leads.length === 0) {
+      console.error(`[leadgen] ❌ CRITICAL: Fallback also returned 0 leads. Check Apollo API and filters.`);
+    } else {
+      console.log(`[leadgen] ✅ Fallback succeeded: collected ${leads.length} leads`);
     }
   }
 
