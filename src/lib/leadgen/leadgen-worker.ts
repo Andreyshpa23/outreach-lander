@@ -90,6 +90,9 @@ async function runSearchForIcp(
       const res = await searchPeople(filters, page, PER_PAGE);
       apolloRequests++;
       const people = (res.people ?? []) as ApolloPerson[];
+      const totalPages = (res.pagination as { total_pages?: number })?.total_pages ?? 1;
+      const totalEntries = (res.pagination as { total_entries?: number })?.total_entries ?? 0;
+      console.log(`[leadgen] step=${step} page=${page} people=${people.length} total_pages=${totalPages} total_entries=${totalEntries} filters=${JSON.stringify(Object.keys(filters)).slice(0, 100)}`);
       if (people.length === 0) {
         hasMore = false;
         break;
@@ -103,9 +106,15 @@ async function runSearchForIcp(
         leads.push(lead);
         if (leads.length >= targetLeads) break;
       }
-      const totalPages = (res.pagination as { total_pages?: number })?.total_pages ?? 1;
-      if (page >= totalPages || people.length < PER_PAGE) hasMore = false;
-      else page++;
+      if (page >= totalPages || people.length < PER_PAGE) {
+        hasMore = false;
+        // Если результатов мало (меньше targetLeads), переходим к следующему шагу widening
+        if (leads.length < targetLeads && totalEntries < targetLeads) {
+          console.log(`[leadgen] step=${step} found ${leads.length}/${targetLeads} leads, total_entries=${totalEntries}, moving to next widening step`);
+        }
+      } else {
+        page++;
+      }
     }
     if (leads.length >= targetLeads) break;
   }

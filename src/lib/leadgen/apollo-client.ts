@@ -111,6 +111,13 @@ export async function searchPeople(
       const data = (await res.json()) as ApolloSearchResponse & { people?: ApolloPerson[]; data?: { people?: ApolloPerson[] }; contacts?: ApolloPerson[] };
       // Apollo may return people at top level, under data, or as contacts; иногда каждый элемент — { person: {...} } и linkedin_url на верхнем уровне
       const raw = data.people ?? (data as { data?: { people?: ApolloPerson[] } }).data?.people ?? (data as { contacts?: ApolloPerson[] }).contacts ?? [];
+      if (page === 1 && raw.length > 0) {
+        console.log("[apollo] filters sent:", JSON.stringify(cleanFilters).slice(0, 300));
+        const firstPerson = raw[0] as Record<string, unknown>;
+        const linkedinKeys = ["linkedin_url", "linkedin_profile_url", "linkedin", "linkedin_slug", "linkedin_id"];
+        const hasLinkedIn = linkedinKeys.some(k => firstPerson[k] != null && String(firstPerson[k]).trim() !== "");
+        console.log("[apollo] first person has linkedin_url:", hasLinkedIn, "keys:", Object.keys(firstPerson).filter(k => k.toLowerCase().includes("linkedin")).join(","));
+      }
       const LINKEDIN_KEYS = ["linkedin_url", "linkedin_profile_url", "linkedin", "linkedin_slug", "linkedin_id"];
       const people = (raw as (ApolloPerson & { person?: ApolloPerson })[]).map((p) => {
         const inner = p && typeof p === "object" && p.person ? p.person : p;
