@@ -97,6 +97,29 @@ async function main() {
   console.log("✅ Время от старта до завершения:", totalSec, "сек");
   if (result.minio_object_key) {
     console.log("✅ MinIO: demo-imports/" + result.minio_object_key);
+    // Проверка: читаем из MinIO и показываем, что там лежат результаты Apollo
+    try {
+      const verifyRes = await fetch(`${BASE}/api/demo-import/verify?key=${encodeURIComponent(result.minio_object_key)}`);
+      const verifyJson = await verifyRes.json();
+      if (verifyRes.ok && verifyJson.payload) {
+        const p = verifyJson.payload;
+        console.log("\n--- Проверка MinIO (результаты Apollo в файле) ---");
+        console.log("  product:", p.product?.name ?? "-");
+        const segs = p.segments ?? [];
+        for (let i = 0; i < segs.length; i++) {
+          const leads = segs[i].leads ?? [];
+          console.log("  segment", i, segs[i].name, "→ leads:", leads.length);
+          if (leads.length > 0) {
+            console.log("    первые 3 LinkedIn URL:", leads.slice(0, 3).map((u) => u.slice(0, 50) + (u.length > 50 ? "…" : "")));
+          }
+        }
+        console.log("--- Конец проверки MinIO ---");
+      } else {
+        console.log("⚠ Не удалось прочитать из MinIO (verify вернул", verifyRes.status + ")");
+      }
+    } catch (e) {
+      console.log("⚠ Ошибка проверки MinIO:", e.message);
+    }
     console.log("\nОткрой MinIO → бакет demo-salestrigger → папка demo-imports/ → файл", result.minio_object_key);
   } else {
     console.log("⚠ В MinIO файл не сохранён (minio_object_key пустой — при 0 лидов файл не создаётся)");

@@ -1,43 +1,26 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-
-const ENDPOINT = process.env.MINIO_ENDPOINT;
-const BUCKET = process.env.MINIO_BUCKET;
-const ACCESS_KEY = process.env.MINIO_ACCESS_KEY;
-const SECRET_KEY = process.env.MINIO_SECRET_KEY;
-
-if (!ENDPOINT || !BUCKET || !ACCESS_KEY || !SECRET_KEY) {
-  console.warn(
-    "MINIO / S3 demo import configuration is not fully set. " +
-      "Set MINIO_ENDPOINT, MINIO_BUCKET, MINIO_ACCESS_KEY, MINIO_SECRET_KEY env vars."
-  );
-}
-
-const s3Client =
-  ENDPOINT && BUCKET && ACCESS_KEY && SECRET_KEY
-    ? new S3Client({
-        region: "us-east-1",
-        endpoint: ENDPOINT,
-        forcePathStyle: true,
-        credentials: {
-          accessKeyId: ACCESS_KEY,
-          secretAccessKey: SECRET_KEY,
-        },
-      })
-    : null;
+import { PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getMinioClient, getDemoImportPrefix } from "@/lib/minio-config";
 
 /**
- * Формат JSON в MinIO (demo-imports/{uuid}.json):
+ * Итоговый формат JSON в MinIO (demo-imports или корень по MINIO_DEMO_PREFIX):
  * - product: name, description, goal_type (MANUAL_GOAL), goal_description
- * - segments: name, personalization, leads (массив ссылок LinkedIn), опционально outreach_personalization, dialog_personalization
+ * - segments: name, personalization, leads (массив LinkedIn URL), опционально leads_detail (полные объекты лидов), outreach_personalization, dialog_personalization
  */
+export interface DemoImportLeadDetail {
+  linkedin_url: string;
+  full_name: string;
+  title: string;
+  company_name: string;
+}
+
 export interface DemoImportSegment {
   name: string;
   personalization: string;
-  /** Ссылки на LinkedIn, например https://linkedin.com/in/jane-smith-1 */
+  /** Ссылки на LinkedIn (обязательно для формата) */
   leads: string[];
-  /** Если задано — промпт для outreach берётся целиком отсюда */
+  /** Полные данные лидов: имя, должность, компания, LinkedIn — для итогового файла от leadgen */
+  leads_detail?: DemoImportLeadDetail[];
   outreach_personalization?: string;
-  /** Если задано — промпт для диалога берётся целиком отсюда */
   dialog_personalization?: string;
 }
 
@@ -134,33 +117,64 @@ export function validateDemoImportPayload(
   return { valid: true };
 }
 
+/**
+ * Upload payload to MinIO. If existingKey is set, overwrite that object (для дополнения файла лидами).
+ */
 export async function uploadDemoImportToS3(
-  payload: DemoImportPayload
+  payload: DemoImportPayload,
+  existingKey?: string
 ): Promise<{ objectKey: string }> {
-  if (!s3Client) {
-    throw new Error("S3 client is not configured");
+  const minio = getMinioClient();
+  if (!minio) {
+    throw new Error(
+      "MinIO не настроен. Задай MINIO_ENDPOINT (порт 9000), MINIO_BUCKET, MINIO_ACCESS_KEY, MINIO_SECRET_KEY в .env.local"
+    );
   }
 
-  const uuid =
-    (typeof crypto !== "undefined" &&
-      "randomUUID" in crypto &&
-      (crypto as any).randomUUID()) ||
-    Math.random().toString(36).slice(2) + Date.now().toString(36);
-
-  const fileKey = `${uuid}.json`;
-  const objectKey = `demo-imports/${fileKey}`;
+  const prefix = getDemoImportPrefix();
+  let objectKey: string;
+  if (existingKey && existingKey.trim()) {
+    objectKey = existingKey.includes("/") ? existingKey.trim() : (prefix ? `${prefix}/${existingKey.trim()}` : existingKey.trim());
+  } else {
+    const uuid =
+      (typeof crypto !== "undefined" && "randomUUID" in crypto && (crypto as any).randomUUID()) ||
+      Math.random().toString(36).slice(2) + Date.now().toString(36);
+    const fileKey = `${uuid}.json`;
+    objectKey = prefix ? `${prefix}/${fileKey}` : fileKey;
+  }
 
   const body = JSON.stringify(payload);
 
   const command = new PutObjectCommand({
-    Bucket: BUCKET,
+    Bucket: minio.bucket,
     Key: objectKey,
     Body: body,
     ContentType: "application/json",
   });
 
-  await s3Client.send(command);
+  await minio.client.send(command);
 
-  return { objectKey: fileKey };
+  return { objectKey };
+}
+
+/**
+ * Read demo-import JSON from MinIO by key (полный ключ в бакете: "uuid.json" или "prefix/uuid.json").
+ */
+export async function getDemoImportFromS3(
+  fileKey: string
+): Promise<DemoImportPayload | null> {
+  const minio = getMinioClient();
+  if (!minio || !fileKey || !fileKey.trim()) return null;
+  const prefix = getDemoImportPrefix();
+  const key = fileKey.includes("/") ? fileKey : prefix ? `${prefix}/${fileKey}` : fileKey;
+  try {
+    const command = new GetObjectCommand({ Bucket: minio.bucket, Key: key });
+    const res = await minio.client.send(command);
+    const body = await res.Body?.transformToString();
+    if (!body) return null;
+    return JSON.parse(body) as DemoImportPayload;
+  } catch {
+    return null;
+  }
 }
 

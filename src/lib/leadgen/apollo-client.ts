@@ -14,7 +14,8 @@ export interface ApolloSearchFilters {
   person_seniorities?: string[];
   organization_num_employees?: string[];
   q_organization_industry_tag_ids?: string[];
-  /** Raw: Apollo may use organization_industry or similar */
+  /** Company keywords: one string (Apollo API expects string, not array). */
+  q_keywords?: string;
   [key: string]: unknown;
 }
 
@@ -62,10 +63,11 @@ export async function searchPeople(
     throw new Error("APOLLO_API_KEY is not set");
   }
 
-  // Apollo: api_key in body + only non-empty filter arrays
+  // Apollo: api_key in body + non-empty filter arrays and strings (e.g. q_keywords is string)
   const cleanFilters: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(filters)) {
     if (Array.isArray(v) && v.length > 0) (cleanFilters as Record<string, unknown>)[k] = v;
+    else if (typeof v === "string" && v.trim()) (cleanFilters as Record<string, unknown>)[k] = v.trim();
   }
   const body: Record<string, unknown> = {
     api_key: apiKey,
@@ -99,9 +101,10 @@ export async function searchPeople(
         throw new Error(`Apollo API error ${res.status}: ${text.slice(0, 200)}`);
       }
 
-      const data = (await res.json()) as ApolloSearchResponse & { people?: ApolloPerson[]; data?: { people?: ApolloPerson[] } };
-      // Apollo may return people at top level or under data
-      const people = data.people ?? (data as { data?: { people?: ApolloPerson[] } }).data?.people ?? [];
+      const data = (await res.json()) as ApolloSearchResponse & { people?: ApolloPerson[]; data?: { people?: ApolloPerson[] }; contacts?: ApolloPerson[] };
+      // Apollo may return people at top level, under data, or as contacts; иногда каждый элемент — { person: {...} }
+      const raw = data.people ?? (data as { data?: { people?: ApolloPerson[] } }).data?.people ?? (data as { contacts?: ApolloPerson[] }).contacts ?? [];
+      const people = (raw as (ApolloPerson & { person?: ApolloPerson })[]).map((p) => (p && typeof p === "object" && p.person ? p.person : p)) as ApolloPerson[];
       const pagination = data.pagination ?? (data as { data?: { pagination?: ApolloSearchResponse["pagination"] } }).data?.pagination;
       return { people, pagination } as ApolloSearchResponse;
     } catch (e) {

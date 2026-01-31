@@ -23,6 +23,8 @@ export interface Icp {
   geo?: IcpGeo;
   positions?: IcpPositions;
   industries?: string[];
+  /** Keywords for company name / keywords / description search (Apollo q_keywords). */
+  industry_keywords?: string[];
   company_size?: IcpCompanySize;
 }
 
@@ -43,6 +45,8 @@ export interface LeadgenJobInput {
   limits?: LeadgenLimits;
   /** Optional: for saving to MinIO with leads = LinkedIn URLs only */
   minio_payload?: LeadgenMinioPayload;
+  /** If set, worker overwrites this MinIO object with leads (instead of creating new file) */
+  minio_key_to_update?: string;
 }
 
 export interface Lead {

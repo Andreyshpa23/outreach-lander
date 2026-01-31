@@ -173,6 +173,11 @@ export default function TestLeadgenPage() {
                     MinIO: сохранено, cookie demo_st_minio_id = {result.minio_object_key}
                   </span>
                 )}
+                {result.status === "done" && (result.leads_count ?? 0) > 0 && !result.minio_object_key && (result.debug as { minio_error?: string } | undefined)?.minio_error && (
+                  <span className="text-amber-600">
+                    MinIO: запись не прошла — {(result.debug as { minio_error: string }).minio_error}
+                  </span>
+                )}
                 {result.download_csv_url && (
                   <a
                     href={result.download_csv_url}

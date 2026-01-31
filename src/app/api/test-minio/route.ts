@@ -1,42 +1,34 @@
 /**
- * GET /api/test-minio — только проверка подключения к MinIO (без записи файлов).
- * В MinIO пишут только: POST /api/demo-import и leadgen worker (реальные LinkedIn URL).
+ * GET /api/test-minio — проверка подключения к MinIO (тот же клиент, что demo-import и leadgen).
  */
 
 import { NextResponse } from "next/server";
-import { S3Client, ListObjectsV2Command } from "@aws-sdk/client-s3";
+import { ListObjectsV2Command } from "@aws-sdk/client-s3";
+import { getMinioConfig, createMinioClient } from "@/lib/minio-config";
 
 export const runtime = "nodejs";
 
 export async function GET() {
-  const endpoint = process.env.MINIO_ENDPOINT;
-  const bucket = process.env.MINIO_BUCKET;
-  const accessKey = process.env.MINIO_ACCESS_KEY;
-  const secretKey = process.env.MINIO_SECRET_KEY;
-
-  if (!endpoint || !bucket || !accessKey || !secretKey) {
+  const config = getMinioConfig();
+  if (!config) {
     return NextResponse.json(
       {
         success: false,
         error: "MinIO env not set",
-        hint: "Задайте MINIO_ENDPOINT, MINIO_BUCKET, MINIO_ACCESS_KEY, MINIO_SECRET_KEY в .env.local",
+        hint: "Задай MINIO_ENDPOINT (порт 9000, без слеша), MINIO_BUCKET, MINIO_ACCESS_KEY, MINIO_SECRET_KEY в .env.local",
       },
-      { status: 500 }
+      { status: 503 }
     );
   }
 
   try {
-    const client = new S3Client({
-      region: "us-east-1",
-      endpoint,
-      forcePathStyle: true,
-      credentials: { accessKeyId: accessKey, secretAccessKey: secretKey },
-    });
-    await client.send(new ListObjectsV2Command({ Bucket: bucket, MaxKeys: 1 }));
+    const client = createMinioClient(config);
+    await client.send(new ListObjectsV2Command({ Bucket: config.bucket, MaxKeys: 1 }));
     return NextResponse.json({
       success: true,
-      message: "MinIO: подключение ок (файлы не создаём)",
-      bucket,
+      message: "MinIO: подключение ок (тот же конфиг, что для записи demo-imports и leadgen)",
+      bucket: config.bucket,
+      endpoint: config.endpoint,
     });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : String(e);
@@ -44,7 +36,8 @@ export async function GET() {
       {
         success: false,
         error: message,
-        hint: "Проверьте адрес (порт 9000 для API), логин и пароль MinIO",
+        hint: "Проверь MINIO_ENDPOINT (порт 9000 для API), MINIO_BUCKET, логин и пароль MinIO",
+        endpoint_used: config.endpoint,
       },
       { status: 500 }
     );

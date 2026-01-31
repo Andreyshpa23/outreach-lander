@@ -30,27 +30,34 @@
 
 Используется для: demo-import (X-Fast-Creation → DEMO_IMPORT_SDR cookie), leadgen CSV.
 
-- **`MINIO_ENDPOINT`** — адрес API MinIO (порт **9000**, не 9001). Пример: `http://92.118.114.94:9000`
-- **`MINIO_BUCKET`** — имя бакета. Пример: `demo-salestrigger`
+- **`MINIO_ENDPOINT`** — адрес API MinIO (порт **9000**, не 9001). Пример: `http://92.118.114.94:9000`  
+  **Без слеша в конце.** Локально: `http://localhost:9000`
+- **`MINIO_BUCKET`** — имя бакета (должен быть создан в MinIO Console). Пример: `demo-salestrigger`
 - **`MINIO_ACCESS_KEY`** — Access Key из MinIO Console (Identity → Service Accounts / Access Keys)
 - **`MINIO_SECRET_KEY`** — Secret Key
+- **`MINIO_DEMO_PREFIX`** — (опционально) папка в бакете для JSON demo-import. По умолчанию **пусто** — файлы пишутся в **корень бакета**. Если нужна папка, задай, например: `demo-imports`
+- **`MINIO_LEADGEN_CSV_PREFIX`** — (опционально) папка для CSV leadgen. По умолчанию **пусто** — CSV в корне бакета. Пример: `leadgen-csv`
 
-UI MinIO: порт 9001. Для приложения нужен API: порт 9000.
+UI MinIO: порт 9001. Для приложения нужен **API: порт 9000**.
 
-**Важно:** без этих четырёх переменных в Vercel (Production) в MinIO с продакшена ничего не попадёт — и demo-import, и leadgen используют одни и те же `MINIO_ENDPOINT`, `MINIO_BUCKET`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY` (логика и пароль).
+Подключение общее для всего приложения: один конфиг в `src/lib/minio-config.ts` (нормализация endpoint, `forcePathStyle`, `disableHostPrefix`). Если в MinIO ничего не появляется — сначала проверь запись.
 
-**Проверка записи на проде:** открой в браузере  
-`https://твой-домен/api/test-minio-write`  
-Если в ответе `success: true` и есть `key` — запись в MinIO по логике и учётным данным работает. Потом открой MinIO → бакет → demo-imports/ и увидишь файл `test-write-*.json`.
+**Проверка записи:** открой в браузере  
+`https://твой-домен/api/test-minio-write` (или локально `http://localhost:3000/api/test-minio-write`)  
+- Если `success: true` и есть `key` — запись в MinIO работает; в бакете появится файл в папке `demo-imports/`.  
+- Если ошибка — в ответе будет точный текст (подключение, бакет не найден, неверный ключ и т.д.) и подсказки (порт 9000, бакет создан, права PutObject).
+
+**Если leadgen отработал, но в MinIO пусто:** в ответе GET `/api/leadgen/{job_id}` смотри поле `debug.minio_error` — там причина сбоя записи (например «MinIO не настроен» или текст от S3/MinIO).
 
 ### Где что лежит в бакете
 
+По умолчанию (без префиксов) файлы пишутся **в корень бакета**: `uuid.json`, `leadgen_*.csv`.  
+Если заданы **MINIO_DEMO_PREFIX** и **MINIO_LEADGEN_CSV_PREFIX** — файлы в этих папках.
+
 | Путь в бакете | Что там | Кто пишет |
 |---------------|---------|-----------|
-| **`demo-imports/`** | JSON-файлы (`uuid.json`) — продукт, сегменты, LinkedIn URL лидов | POST /api/demo-import и leadgen worker (когда есть лиды + minio_payload) |
-| **`leadgen-csv/`** | CSV-файлы выгрузки лидов Apollo | Leadgen worker (всегда при успешном сборе лидов) |
-
-Если запускали **leadgen** и ждёте CSV — смотрите папку **leadgen-csv/** в том же бакете, не только demo-imports.
+| **корень** или **`{MINIO_DEMO_PREFIX}/`** | JSON (`uuid.json`) — продукт, сегменты, **массив LinkedIn URL** в `segments[].leads` | POST /api/demo-import и leadgen worker (когда есть лиды + minio_payload) |
+| **корень** или **`{MINIO_LEADGEN_CSV_PREFIX}/`** | CSV выгрузки лидов Apollo (в т.ч. колонка linkedin_url) | Leadgen worker при успешном сборе лидов |
 
 ---
 

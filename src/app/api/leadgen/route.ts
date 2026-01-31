@@ -33,6 +33,7 @@ function normalizeIcp(body: any): Icp {
           } as IcpPositions)
         : undefined,
     industries: Array.isArray(icp.industries) ? icp.industries : undefined,
+    industry_keywords: Array.isArray(icp.industry_keywords) ? icp.industry_keywords : undefined,
     company_size:
       companySize && typeof companySize === "object" && Array.isArray(companySize.employee_ranges)
         ? ({ employee_ranges: companySize.employee_ranges } as IcpCompanySize)
@@ -47,6 +48,7 @@ export async function POST(req: Request) {
     const icp = normalizeIcp(body);
     const limits = body.limits ?? {};
     const minio_payload = body.minio_payload;
+    const minio_key_to_update = typeof body.minio_key_to_update === "string" ? body.minio_key_to_update.trim() : undefined;
     const input: LeadgenJobInput = {
       job_id,
       icp,
@@ -55,6 +57,7 @@ export async function POST(req: Request) {
         max_runtime_ms: limits.max_runtime_ms ?? 45000,
       },
       ...(minio_payload?.product && minio_payload?.segments?.length && { minio_payload }),
+      ...(minio_key_to_update && { minio_key_to_update }),
     };
 
     createJob(job_id, input);

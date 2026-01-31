@@ -126,23 +126,44 @@ export async function runLeadgenWorker(jobId: string): Promise<void> {
     }
   }
 
+  let minioError: string | undefined;
   const minioPayload = (input as LeadgenJobInput).minio_payload;
-  if (linkedin_urls.length > 0 && minioPayload?.product && minioPayload?.segments?.length) {
+  const minioKeyToUpdate = (input as LeadgenJobInput).minio_key_to_update;
+  const shouldUpdateMinio =
+    minioPayload?.product &&
+    minioPayload?.segments?.length &&
+    (linkedin_urls.length > 0 || minioKeyToUpdate);
+  if (shouldUpdateMinio) {
     try {
+      const product = minioPayload!.product;
+      const leads_detail = finalLeads.map((l) => ({
+        linkedin_url: l.linkedin_url,
+        full_name: l.full_name,
+        title: l.title,
+        company_name: l.company_name,
+      }));
       const payload = {
-        product: minioPayload.product,
-        segments: minioPayload.segments.map((s) => ({
+        product: {
+          name: product.name,
+          description: product.description,
+          goal_type: product.goal_type || "MANUAL_GOAL",
+          goal_description: product.goal_description || "",
+        },
+        segments: minioPayload!.segments.map((s) => ({
           name: s.name,
           personalization: s.personalization,
           leads: linkedin_urls,
+          leads_detail,
           ...(s.outreach_personalization != null && { outreach_personalization: s.outreach_personalization }),
           ...(s.dialog_personalization != null && { dialog_personalization: s.dialog_personalization }),
         })),
       };
-      const { objectKey } = await uploadDemoImportToS3(payload);
+      const { objectKey } = await uploadDemoImportToS3(payload, minioKeyToUpdate);
       minio_object_key = objectKey;
     } catch (e) {
-      console.error("Leadgen MinIO upload error:", e);
+      const errMsg = e instanceof Error ? e.message : String(e);
+      minioError = errMsg;
+      console.error("Leadgen MinIO upload error:", errMsg, e);
     }
   }
 
@@ -158,6 +179,7 @@ export async function runLeadgenWorker(jobId: string): Promise<void> {
       apollo_requests: apolloRequests,
       widening_steps_applied: wideningStepsApplied,
       partial_due_to_timeout: partialDueToTimeout,
+      ...(minioError != null && { minio_error: minioError }),
     },
     error: partialDueToTimeout
       ? `Stopped at ${finalLeads.length} leads due to timeout`
