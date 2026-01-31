@@ -1,5 +1,5 @@
 // Simple token usage limiter
-// Stores usage in a JSON file (resets daily)
+// Stores usage in a JSON file (resets daily) or in-memory in Vercel
 
 import fs from 'fs';
 import path from 'path';
@@ -10,15 +10,36 @@ interface UsageData {
   tokens: number;
 }
 
-const USAGE_FILE = path.join(process.cwd(), '.token-usage.json');
+// Detect Vercel/serverless environment
+const IS_VERCEL = !!process.env.VERCEL || !!process.env.VERCEL_ENV || process.cwd() === '/var/task';
+const USE_FILE_SYSTEM = !IS_VERCEL;
+
+// In-memory fallback for Vercel
+const MEMORY_USAGE: UsageData = { date: '', requests: 0, tokens: 0 };
+
+const USAGE_FILE = USE_FILE_SYSTEM 
+  ? path.join(process.cwd(), '.token-usage.json')
+  : path.join('/tmp', '.token-usage.json');
 
 function getTodayDate(): string {
   return new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 }
 
 function readUsage(): UsageData {
+  // In Vercel, use in-memory storage
+  if (!USE_FILE_SYSTEM) {
+    const today = getTodayDate();
+    if (MEMORY_USAGE.date !== today) {
+      MEMORY_USAGE.date = today;
+      MEMORY_USAGE.requests = 0;
+      MEMORY_USAGE.tokens = 0;
+    }
+    return { ...MEMORY_USAGE };
+  }
+  
+  // Try file system
   try {
-    if (fs.existsSync(USAGE_FILE)) {
+    if (fs.existsSync && fs.existsSync(USAGE_FILE)) {
       const data = fs.readFileSync(USAGE_FILE, 'utf-8');
       return JSON.parse(data);
     }
@@ -29,10 +50,22 @@ function readUsage(): UsageData {
 }
 
 function writeUsage(usage: UsageData): void {
+  // In Vercel, update in-memory storage only
+  if (!USE_FILE_SYSTEM) {
+    MEMORY_USAGE.date = usage.date;
+    MEMORY_USAGE.requests = usage.requests;
+    MEMORY_USAGE.tokens = usage.tokens;
+    return;
+  }
+  
+  // Try file system
   try {
-    fs.writeFileSync(USAGE_FILE, JSON.stringify(usage, null, 2));
+    if (fs.writeFileSync) {
+      fs.writeFileSync(USAGE_FILE, JSON.stringify(usage, null, 2));
+    }
   } catch (error) {
-    console.error('Error writing usage file:', error);
+    // Silently fail - in-memory will be used on next read
+    console.warn('[token-limiter] Failed to write usage file, using in-memory:', error);
   }
 }
 

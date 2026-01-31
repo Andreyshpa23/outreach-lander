@@ -17,7 +17,18 @@ const JOBS_DIR = IS_VERCEL
 const MEMORY = new Map<string, LeadgenJobResult & { input?: LeadgenJobInput }>();
 
 function ensureJobsDir() {
-  if (!USE_FILE_SYSTEM || typeof fs.existsSync === "undefined") return;
+  // Double-check: never create directories in /var/task (Vercel)
+  const currentDir = process.cwd();
+  if (currentDir === '/var/task' || !USE_FILE_SYSTEM || typeof fs.existsSync === "undefined") {
+    return;
+  }
+  
+  // Additional safety: check if path contains /var/task
+  if (JOBS_DIR.includes('/var/task')) {
+    console.warn('[job-store] Skipping directory creation in /var/task (Vercel)');
+    return;
+  }
+  
   try {
     if (!fs.existsSync(JOBS_DIR)) {
       fs.mkdirSync(JOBS_DIR, { recursive: true });

@@ -50,8 +50,16 @@ const MEMORY_SESSIONS = new Map<string, UserSession>();
 
 // Ensure sessions directory exists (only if not in Vercel or if /tmp is available)
 function ensureSessionsDir() {
-  if (!USE_FILE_SYSTEM) {
+  // Double-check: never create directories in /var/task (Vercel)
+  const currentDir = process.cwd();
+  if (currentDir === '/var/task' || !USE_FILE_SYSTEM) {
     // In Vercel, skip file system operations entirely
+    return;
+  }
+  
+  // Additional safety: check if path contains /var/task
+  if (SESSIONS_DIR.includes('/var/task')) {
+    console.warn('[session-storage] Skipping directory creation in /var/task (Vercel)');
     return;
   }
   
