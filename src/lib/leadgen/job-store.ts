@@ -6,14 +6,18 @@ import type { LeadgenJobInput, LeadgenJobResult } from "./types";
 import fs from "fs";
 import path from "path";
 
+// Detect Vercel/serverless environment
+const IS_VERCEL = !!process.env.VERCEL || !!process.env.VERCEL_ENV || process.cwd() === '/var/task';
+const USE_FILE_SYSTEM = !IS_VERCEL;
+
 // In Vercel, use /tmp (only writable directory). Otherwise use .leadgen-jobs in project root.
-const JOBS_DIR = process.env.VERCEL 
+const JOBS_DIR = IS_VERCEL 
   ? path.join('/tmp', '.leadgen-jobs')
   : path.join(process.cwd(), ".leadgen-jobs");
 const MEMORY = new Map<string, LeadgenJobResult & { input?: LeadgenJobInput }>();
 
 function ensureJobsDir() {
-  if (typeof fs.existsSync === "undefined") return;
+  if (!USE_FILE_SYSTEM || typeof fs.existsSync === "undefined") return;
   try {
     if (!fs.existsSync(JOBS_DIR)) {
       fs.mkdirSync(JOBS_DIR, { recursive: true });
@@ -48,34 +52,42 @@ export function createJob(
     input,
   };
   MEMORY.set(jobId, job);
-  try {
-    ensureJobsDir();
-    fs.writeFileSync(
-      jobPath(jobId),
-      JSON.stringify(job, null, 2),
-      "utf-8"
-    );
-  } catch (e) {
-    console.error("Job store write error:", e);
+  if (USE_FILE_SYSTEM) {
+    try {
+      ensureJobsDir();
+      fs.writeFileSync(
+        jobPath(jobId),
+        JSON.stringify(job, null, 2),
+        "utf-8"
+      );
+    } catch (e) {
+      console.error("Job store write error:", e);
+    }
   }
   return job;
 }
 
 /** Prefer file over memory so GET sees updates from run in another process (e.g. dev server). */
 export function getJob(jobId: string): (LeadgenJobResult & { input?: LeadgenJobInput }) | null {
-  try {
-    const fp = jobPath(jobId);
-    if (typeof fs.existsSync !== "undefined" && fs.existsSync(fp)) {
-      const raw = fs.readFileSync(fp, "utf-8");
-      const job = JSON.parse(raw) as LeadgenJobResult & { input?: LeadgenJobInput };
-      MEMORY.set(jobId, job);
-      return job;
-    }
-  } catch (e) {
-    console.error("Job store read error:", e);
-  }
+  // Try memory first (always available)
   const mem = MEMORY.get(jobId);
   if (mem) return mem;
+  
+  // Try file system only if not in Vercel
+  if (USE_FILE_SYSTEM) {
+    try {
+      const fp = jobPath(jobId);
+      if (typeof fs.existsSync !== "undefined" && fs.existsSync(fp)) {
+        const raw = fs.readFileSync(fp, "utf-8");
+        const job = JSON.parse(raw) as LeadgenJobResult & { input?: LeadgenJobInput };
+        MEMORY.set(jobId, job);
+        return job;
+      }
+    } catch (e) {
+      console.error("Job store read error:", e);
+    }
+  }
+  
   return null;
 }
 
@@ -91,15 +103,17 @@ export function updateJob(
     updated_at: new Date().toISOString(),
   };
   MEMORY.set(jobId, updated);
-  try {
-    ensureJobsDir();
-    fs.writeFileSync(
-      jobPath(jobId),
-      JSON.stringify(updated, null, 2),
-      "utf-8"
-    );
-  } catch (e) {
-    console.error("Job store update error:", e);
+  if (USE_FILE_SYSTEM) {
+    try {
+      ensureJobsDir();
+      fs.writeFileSync(
+        jobPath(jobId),
+        JSON.stringify(updated, null, 2),
+        "utf-8"
+      );
+    } catch (e) {
+      console.error("Job store update error:", e);
+    }
   }
   return updated;
 }
