@@ -53,12 +53,11 @@ export function createJob(
   return job;
 }
 
+/** Prefer file over memory so GET sees updates from run in another process (e.g. dev server). */
 export function getJob(jobId: string): (LeadgenJobResult & { input?: LeadgenJobInput }) | null {
-  const mem = MEMORY.get(jobId);
-  if (mem) return mem;
   try {
     const fp = jobPath(jobId);
-    if (fs.existsSync(fp)) {
+    if (typeof fs.existsSync !== "undefined" && fs.existsSync(fp)) {
       const raw = fs.readFileSync(fp, "utf-8");
       const job = JSON.parse(raw) as LeadgenJobResult & { input?: LeadgenJobInput };
       MEMORY.set(jobId, job);
@@ -67,6 +66,8 @@ export function getJob(jobId: string): (LeadgenJobResult & { input?: LeadgenJobI
   } catch (e) {
     console.error("Job store read error:", e);
   }
+  const mem = MEMORY.get(jobId);
+  if (mem) return mem;
   return null;
 }
 

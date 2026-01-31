@@ -57,18 +57,28 @@ async function main() {
     return;
   }
 
-  // --- 3b. Запуск воркера вручную (на случай если fire-and-forget не долетел) ---
-  console.log("\n--- 3b. POST /api/leadgen/run (запуск воркера) ---");
+  // --- 3b. Запуск воркера с полным input (как на проде), чтобы воркер не зависел от job store ---
+  const runInput = {
+    job_id: jobId,
+    icp: leadgenPayload.icp,
+    limits: leadgenPayload.limits,
+  };
+  console.log("\n--- 3b. POST /api/leadgen/run (запуск воркера с input) ---");
   try {
     const runRes = await fetch(`${BASE}/api/leadgen/run`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ job_id: jobId }),
+      body: JSON.stringify({ job_id: jobId, input: runInput }),
     });
     const runJson = await runRes.json().catch(() => ({}));
     console.log("Run status:", runRes.status, runJson);
+    if (!runRes.ok) {
+      console.log("❌ Run failed:", runJson);
+      return;
+    }
   } catch (e) {
     console.error("Run request error:", e.message);
+    return;
   }
 
   // --- 3. Poll GET /api/leadgen/{job_id} ---
