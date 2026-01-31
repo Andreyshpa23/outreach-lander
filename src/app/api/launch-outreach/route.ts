@@ -11,7 +11,7 @@ import {
   validateDemoImportPayload,
 } from "@/lib/demo-import-storage";
 import { getMinioClient } from "@/lib/minio-config";
-import { createJob, generateJobId } from "@/lib/leadgen/job-store";
+import { createJob, generateJobId, getJob } from "@/lib/leadgen/job-store";
 import type { LeadgenJobInput, Icp, IcpGeo, IcpPositions, IcpCompanySize, SegmentIcp } from "@/lib/leadgen/types";
 import { runLeadgenWorker } from "@/lib/leadgen/leadgen-worker";
 
@@ -172,10 +172,13 @@ export async function POST(req: Request) {
 
     await runLeadgenWorker(job_id, input);
 
+    const job = getJob(job_id);
     const res = NextResponse.json({
       success: true,
       key: objectKey,
       job_id,
+      download_csv_url: job?.download_csv_url ?? null,
+      leads_count: job?.leads_count ?? 0,
     });
     res.cookies.set("demo_st_minio_id", objectKey, {
       path: "/",

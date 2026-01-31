@@ -65,6 +65,7 @@ export default function Page() {
   });
   const [showIcpEdit, setShowIcpEdit] = useState(false);
   const [launchSaving, setLaunchSaving] = useState(false);
+  const [launchResult, setLaunchResult] = useState<{ download_csv_url: string | null; leads_count: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatMessagesEndRef = useRef<HTMLDivElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
@@ -319,6 +320,10 @@ export default function Page() {
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success && data.key) {
         setCookie("demo_st_minio_id", data.key, 30);
+        setLaunchResult({
+          download_csv_url: data.download_csv_url ?? null,
+          leads_count: data.leads_count ?? 0,
+        });
         setShowAuthModal(true);
       } else {
         const msg = data?.error || (res.status === 503 ? "MinIO не настроен на сервере. Добавьте MINIO_* в Vercel." : "Не удалось запустить outreach.");
@@ -2290,6 +2295,25 @@ export default function Page() {
               <h2 className="text-2xl font-bold text-zinc-900">Get Started</h2>
               <p className="mt-2 text-sm text-zinc-600">Sign in to launch your AI Sales Agent</p>
             </div>
+
+            {/* CSV download if we just launched */}
+            {launchResult && (launchResult.leads_count > 0 || launchResult.download_csv_url) && (
+              <div className="mb-6 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                <p className="text-sm font-medium text-zinc-800">
+                  Лидов собрано: {launchResult.leads_count}
+                </p>
+                {launchResult.download_csv_url && (
+                  <a
+                    href={launchResult.download_csv_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-block text-sm font-medium text-blue-600 hover:text-blue-800"
+                  >
+                    Скачать CSV с лидами →
+                  </a>
+                )}
+              </div>
+            )}
 
             {/* Google Sign In */}
             <Button
