@@ -118,25 +118,14 @@ export async function POST(req: Request) {
     };
     createJob(job_id, input);
 
-    const host = req.headers.get("host") || req.headers.get("x-forwarded-host");
-    const proto = req.headers.get("x-forwarded-proto") || (host?.includes("localhost") ? "http" : "https");
-    const origin =
-      process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : process.env.NEXT_PUBLIC_APP_URL ?? (host ? `${proto}://${host}` : "http://localhost:3000");
-
-    const runUrl = `${origin}/api/leadgen/run`;
-    console.log("[launch-outreach] triggering leadgen run url=" + runUrl + " job_id=" + job_id);
-    fetch(runUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ job_id, input }),
-    }).then((r) => {
-      console.log("[launch-outreach] leadgen run response status=" + r.status);
-      if (!r.ok) r.text().then((t) => console.error("[launch-outreach] leadgen run body", t));
-    }).catch((err) => console.error("Launch outreach: leadgen run trigger error:", err));
-
-    const res = NextResponse.json({ success: true, key: objectKey });
+    // Не вызываем /api/leadgen/run отсюда: на Vercel функция завершается после return,
+    // и фоновый fetch часто не успевает выполниться. Запуск делается с клиента (см. page.tsx).
+    const res = NextResponse.json({
+      success: true,
+      key: objectKey,
+      job_id,
+      input,
+    });
     res.cookies.set("demo_st_minio_id", objectKey, {
       path: "/",
       maxAge: 60 * 60 * 24 * 30,

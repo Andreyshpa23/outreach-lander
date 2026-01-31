@@ -318,6 +318,13 @@ export default function Page() {
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success && data.key) {
         setCookie("demo_st_minio_id", data.key, 30);
+        if (data.job_id && data.input) {
+          fetch("/api/leadgen/run", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ job_id: data.job_id, input: data.input }),
+          }).catch(() => {});
+        }
         setShowAuthModal(true);
       } else {
         const msg = data?.error || (res.status === 503 ? "MinIO не настроен на сервере. Добавьте MINIO_* в Vercel." : "Не удалось запустить outreach.");
