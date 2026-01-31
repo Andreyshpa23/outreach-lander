@@ -128,7 +128,7 @@ export async function POST(req: Request) {
     fetch(`${origin}/api/leadgen/run`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ job_id }),
+      body: JSON.stringify({ job_id, input }),
     }).catch((err) => console.error("Launch outreach: leadgen run trigger error:", err));
 
     const res = NextResponse.json({ success: true, key: objectKey });

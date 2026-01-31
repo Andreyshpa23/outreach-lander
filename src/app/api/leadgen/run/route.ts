@@ -12,13 +12,14 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
     const job_id = body.job_id;
+    const input = body.input;
     if (!job_id || typeof job_id !== "string") {
       return NextResponse.json(
         { error: "job_id required" },
         { status: 400 }
       );
     }
-    await runLeadgenWorker(job_id);
+    await runLeadgenWorker(job_id, input);
     return NextResponse.json({ success: true, job_id });
   } catch (e: any) {
     console.error("Leadgen run error:", e);

@@ -17,23 +17,23 @@ const MAX_RUNTIME_MS_DEFAULT = 45000;
 const PER_PAGE = 100;
 const PREVIEW_SIZE = 50;
 
-export async function runLeadgenWorker(jobId: string): Promise<void> {
-  const job = getJob(jobId);
-  if (!job || !job.input) {
-    updateJob(jobId, { status: "failed", error: "Job or input not found" });
+export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJobInput): Promise<void> {
+  const job = inputOverride ? null : getJob(jobId);
+  const input = inputOverride ?? job?.input;
+  if (!input) {
+    if (!inputOverride) updateJob(jobId, { status: "failed", error: "Job or input not found" });
     return;
   }
-  if (job.status !== "queued") {
+  if (!inputOverride && job && job.status !== "queued") {
     return;
   }
-
-  const input = job.input as LeadgenJobInput;
+  if (!inputOverride) {
+    updateJob(jobId, { status: "running" });
+  }
   const icp = input.icp;
   const targetLeads = input.limits?.target_leads ?? TARGET_LEADS_DEFAULT;
   const maxRuntimeMs = input.limits?.max_runtime_ms ?? MAX_RUNTIME_MS_DEFAULT;
   const deadline = Date.now() + maxRuntimeMs;
-
-  updateJob(jobId, { status: "running" });
 
   const seen = new Set<string>();
   const leads: Lead[] = [];
