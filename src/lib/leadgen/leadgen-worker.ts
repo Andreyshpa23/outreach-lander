@@ -212,25 +212,30 @@ async function runSearchForIcp(
   }
 
   const finalLeads = leads.slice(0, targetLeads);
+  // Enrichment is CRITICAL - always try to enrich, use all available time
   const enrichLimit = Math.min(
     Math.max(0, parseInt(process.env.APOLLO_ENRICH_FOR_LINKEDIN_LIMIT ?? String(targetLeads), 10) || targetLeads),
     targetLeads
   );
-  const ENRICH_DELAY_MS = 100; // Reduced delay for faster enrichment
-  const deadlineForEnrich = deadline - 3000; // More time for enrichment (was 8000ms reserve, now 3000ms)
+  const ENRICH_DELAY_MS = 50; // Faster delay for more enrichment
+  // Use most of remaining time for enrichment (reserve only 1 second for final processing)
+  const deadlineForEnrich = deadline - 1000;
   
   // Enrich leads without LinkedIn URL: try getPersonById first (faster), then enrichPerson
   const withoutLinkedIn = finalLeads.filter((l) => !onlyLinkedInUrl(l.linkedin_url));
-  console.log(`[leadgen] Enrichment: ${withoutLinkedIn.length}/${finalLeads.length} leads need LinkedIn URL enrichment`);
+  console.log(`[leadgen] Enrichment START: ${withoutLinkedIn.length}/${finalLeads.length} leads need LinkedIn URL enrichment, deadline in ${deadlineForEnrich - Date.now()}ms`);
   
-  if (enrichLimit > 0 && withoutLinkedIn.length > 0 && Date.now() < deadlineForEnrich) {
+  // ALWAYS try enrichment if we have leads without LinkedIn URLs and time left
+  if (withoutLinkedIn.length > 0 && Date.now() < deadlineForEnrich) {
     let enriched = 0;
     let attempted = 0;
     const enrichStart = Date.now();
     
+    // Enrich ALL leads that need it, not just up to enrichLimit
     for (const lead of withoutLinkedIn) {
-      if (enriched >= enrichLimit || Date.now() >= deadlineForEnrich) {
-        console.log(`[leadgen] Enrichment stopped: enriched=${enriched}, attempted=${attempted}, time_left=${deadlineForEnrich - Date.now()}ms`);
+      // Stop only if we're out of time (keep 500ms buffer)
+      if (Date.now() >= deadlineForEnrich - 500) {
+        console.log(`[leadgen] Enrichment stopped (time): enriched=${enriched}, attempted=${attempted}, time_left=${deadlineForEnrich - Date.now()}ms`);
         break;
       }
       if (attempted > 0) await new Promise((r) => setTimeout(r, ENRICH_DELAY_MS));
@@ -279,7 +284,15 @@ async function runSearchForIcp(
     
     const enrichElapsed = Date.now() - enrichStart;
     console.log(`[leadgen] Enrichment completed: ${enriched}/${attempted} enriched in ${enrichElapsed}ms`);
-    if (segmentLabel && enriched > 0) console.log("[leadgen] segment=" + segmentLabel + " enriched " + enriched + " with LinkedIn");
+    if (segmentLabel) {
+      if (enriched > 0) {
+        console.log(`[leadgen] ✅ segment="${segmentLabel}" enriched ${enriched} leads with LinkedIn`);
+      } else {
+        console.warn(`[leadgen] ⚠️ segment="${segmentLabel}" enrichment completed but 0 leads enriched!`);
+      }
+    }
+  } else if (withoutLinkedIn.length > 0) {
+    console.error(`[leadgen] ❌ Enrichment SKIPPED! ${withoutLinkedIn.length} leads need enrichment but time check failed: Date.now()=${Date.now()}, deadlineForEnrich=${deadlineForEnrich}`);
   }
   
   // Extract LinkedIn URLs: use linkedin_url if available
