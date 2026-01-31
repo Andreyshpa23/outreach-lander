@@ -6,13 +6,21 @@ import type { LeadgenJobInput, LeadgenJobResult } from "./types";
 import fs from "fs";
 import path from "path";
 
-const JOBS_DIR = path.join(process.cwd(), ".leadgen-jobs");
+// In Vercel, use /tmp (only writable directory). Otherwise use .leadgen-jobs in project root.
+const JOBS_DIR = process.env.VERCEL 
+  ? path.join('/tmp', '.leadgen-jobs')
+  : path.join(process.cwd(), ".leadgen-jobs");
 const MEMORY = new Map<string, LeadgenJobResult & { input?: LeadgenJobInput }>();
 
 function ensureJobsDir() {
   if (typeof fs.existsSync === "undefined") return;
-  if (!fs.existsSync(JOBS_DIR)) {
-    fs.mkdirSync(JOBS_DIR, { recursive: true });
+  try {
+    if (!fs.existsSync(JOBS_DIR)) {
+      fs.mkdirSync(JOBS_DIR, { recursive: true });
+    }
+  } catch (error) {
+    // If directory creation fails (e.g., in strict serverless), use in-memory only
+    console.warn('[job-store] Failed to create jobs dir, using in-memory storage:', error);
   }
 }
 

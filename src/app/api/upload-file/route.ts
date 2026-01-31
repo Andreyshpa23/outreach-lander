@@ -49,9 +49,19 @@ export async function POST(req: Request) {
     }
 
     // Create uploads directory if it doesn't exist
-    const uploadsDir = join(process.cwd(), 'uploads', sessionId);
-    if (!existsSync(uploadsDir)) {
-      await mkdir(uploadsDir, { recursive: true });
+    // In Vercel, use /tmp (only writable directory). Otherwise use uploads in project root.
+    const baseDir = process.env.VERCEL ? '/tmp' : process.cwd();
+    const uploadsDir = join(baseDir, 'uploads', sessionId);
+    try {
+      if (!existsSync(uploadsDir)) {
+        await mkdir(uploadsDir, { recursive: true });
+      }
+    } catch (error) {
+      console.error('[upload-file] Failed to create uploads dir:', error);
+      return NextResponse.json(
+        { error: 'Failed to create upload directory' },
+        { status: 500 }
+      );
     }
 
     // Generate unique filename
