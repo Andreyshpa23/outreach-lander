@@ -49,19 +49,54 @@ function targetAudienceToIcp(ta: TargetAudienceBody): Icp {
   };
 }
 
-/** Из строки фильтров (linkedin_filters от промпта) — титулы и ключевые слова для сегмента. */
+/**
+ * Парсим linkedin_filters в формате Apollo (из промпта generate):
+ * "Titles: CEO, Founder, VP Sales. Keywords: SaaS, B2B, technology."
+ * → positions.titles_strict, industry_keywords для корректного запроса к Apollo API.
+ */
 function linkedinFiltersToIcpAddition(linkedinFilters: string | undefined): Partial<Icp> {
   if (!linkedinFilters || typeof linkedinFilters !== "string") return {};
-  const tokens = linkedinFilters
+  const raw = linkedinFilters.trim();
+  if (!raw.length) return {};
+
+  let titles: string[] = [];
+  let keywords: string[] = [];
+
+  const titlesMatch = raw.match(/\bTitles?\s*:\s*([^.]+?)(?=\s*\.?\s*Keywords?\s*:|$)/i);
+  const keywordsMatch = raw.match(/\bKeywords?\s*:\s*(.+)$/i);
+
+  if (titlesMatch) {
+    titles = titlesMatch[1]
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 10);
+  }
+  if (keywordsMatch) {
+    keywords = keywordsMatch[1]
+      .split(",")
+      .map((s) => s.trim().replace(/\.+$/, ""))
+      .filter(Boolean)
+      .slice(0, 10);
+  }
+
+  if (titles.length > 0 || keywords.length > 0) {
+    return {
+      positions: titles.length > 0 ? ({ titles_strict: titles } as IcpPositions) : undefined,
+      industry_keywords: keywords.length > 0 ? keywords : (titles.length > 0 ? titles : undefined),
+    };
+  }
+
+  // Fallback: одна строка без меток — разбиваем по запятым/точке с запятой, первые = титулы, все = ключевые слова
+  const tokens = raw
     .split(/[,;|]/)
     .map((s) => s.trim())
     .filter(Boolean);
   if (!tokens.length) return {};
-  const titles = tokens.slice(0, 5);
-  const keywords = tokens.length > 1 ? tokens : tokens;
+  const fallbackTitles = tokens.slice(0, 5);
   return {
-    positions: { titles_strict: titles } as IcpPositions,
-    industry_keywords: keywords,
+    positions: { titles_strict: fallbackTitles } as IcpPositions,
+    industry_keywords: tokens,
   };
 }
 

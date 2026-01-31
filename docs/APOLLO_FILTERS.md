@@ -24,6 +24,32 @@
 
 ---
 
+## Формат linkedin_filters от промпта (generate API) → инпут Apollo
+
+Чтобы запрос к Apollo с сайта возвращал лиды, фильтры по сегментам должны приходить в **формате Apollo**. Промпт generate генерирует для каждого сегмента строку `linkedin_filters`, которую мы парсим и маппим в ICP → Apollo.
+
+### Ожидаемый формат строки (одна строка на сегмент)
+
+```
+Titles: job title 1, job title 2, job title 3. Keywords: keyword1, keyword2, keyword3.
+```
+
+- **Titles:** — маппинг в `person_titles` (Apollo). Кома-разделённый список должностей (например: CEO, Founder, VP Sales). Обязательно для поиска людей.
+- **Keywords:** — маппинг в `q_keywords` (Apollo). Кома-разделённый список ключевых слов по компании/индустрии (например: SaaS, B2B, technology). Используется для поиска по name, keywords, company description.
+
+Категоризация результатов промпта по сегментам Apollo:
+
+| Сегмент промпта (linkedin_filters) | Наш ICP | Apollo API |
+|------------------------------------|---------|------------|
+| Titles: ...                        | positions.titles_strict | person_titles |
+| Keywords: ...                      | industry_keywords       | q_keywords (одна строка) |
+| (из target_audience) geo           | geo.countries/regions   | person_locations, organization_locations |
+| (из target_audience) company_size  | company_size.employee_ranges | organization_num_employees (формат "1-10", "11-50") |
+
+Если формат "Titles: ... Keywords: ..." не найден, парсер использует fallback: вся строка разбивается по запятым/точке с запятой; первые значения — титулы, все — ключевые слова.
+
+---
+
 ## Полный глоссарий фильтров Apollo (Filter Glossary)
 
 По [Search Filters Overview → Filter Glossary](https://knowledge.apollo.io/hc/en-us/articles/4412665755661-Search-Filters-Overview#toc_3).

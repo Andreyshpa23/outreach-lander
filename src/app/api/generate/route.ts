@@ -203,7 +203,24 @@ Based on the product and segments, infer the ideal customer profile and fill tar
 - geo: string - main geography (e.g. "United States, Canada", "UK, Germany")
 - positions: array of strings - job titles (e.g. ["CEO", "VP Sales", "Head of Marketing"])
 - industry: string - industries (e.g. "SaaS, Technology", "Finance, Insurance")
-- company_size: string - employee ranges (e.g. "51-200, 201-500", "1-50, 51-200")
+- company_size: string - employee ranges in Apollo format with HYPHEN (e.g. "1-10, 11-50, 51-200", "201-500")
+
+=====================
+LINKEDIN FILTERS - APOLLO FORMAT (CRITICAL FOR LEAD SEARCH)
+=====================
+
+For each segment, linkedin_filters is sent to Apollo API to find leads. It MUST be in this exact format so our system can build a valid Apollo request:
+
+Format (one string per segment):
+  "Titles: job title 1, job title 2, job title 3. Keywords: keyword1, keyword2, keyword3."
+
+Rules:
+- Titles: comma-separated list of job titles. These map to Apollo person_titles (e.g. "CEO", "Founder", "VP Sales", "Head of Marketing", "CTO"). Use 2-5 concrete titles per segment. Different segments can have different titles.
+- Keywords: comma-separated list for company/industry search. These map to Apollo q_keywords (company name, keywords, description). Use 2-4 terms (e.g. "SaaS", "B2B", "technology", "startup"). Different segments can have different keywords.
+- Always include both "Titles:" and "Keywords:" in every segment. If you omit one, lead search will return zero results.
+- Use only letters, numbers, commas, and spaces inside Titles and Keywords. No semicolons, colons (except after "Titles" and "Keywords"), or newlines inside the value.
+- Example for segment 1: "Titles: CEO, Founder, Co-Founder. Keywords: SaaS, B2B, technology."
+- Example for segment 2: "Titles: VP Sales, Head of Sales, Sales Director. Keywords: enterprise, software, fintech."
 
 =====================
 OUTPUT FORMAT (STRICT)
@@ -227,7 +244,7 @@ OUTPUT FORMAT (STRICT)
   "segments": [
     {
       "name": "string",
-      "linkedin_filters": "string",
+      "linkedin_filters": "string (Apollo format: Titles: ..., Keywords: ...)",
       "personalization_ideas": "string",
       "outreach_sequence": [
         "message step 1",
@@ -238,7 +255,7 @@ OUTPUT FORMAT (STRICT)
     },
     {
       "name": "string",
-      "linkedin_filters": "string",
+      "linkedin_filters": "string (Apollo format: Titles: ..., Keywords: ...)",
       "personalization_ideas": "string",
       "outreach_sequence": [
         "message step 1",
