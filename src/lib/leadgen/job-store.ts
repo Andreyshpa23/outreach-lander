@@ -6,32 +6,42 @@ import type { LeadgenJobInput, LeadgenJobResult } from "./types";
 import fs from "fs";
 import path from "path";
 
-// Detect Vercel/serverless environment
-const IS_VERCEL = !!process.env.VERCEL || !!process.env.VERCEL_ENV || process.cwd() === '/var/task';
-const USE_FILE_SYSTEM = !IS_VERCEL;
-
-// In Vercel, use /tmp (only writable directory). Otherwise use .leadgen-jobs in project root.
-const JOBS_DIR = IS_VERCEL 
-  ? path.join('/tmp', '.leadgen-jobs')
-  : path.join(process.cwd(), ".leadgen-jobs");
 const MEMORY = new Map<string, LeadgenJobResult & { input?: LeadgenJobInput }>();
 
+// Detect Vercel/serverless environment at runtime (not at module load)
+function isVercelEnvironment(): boolean {
+  // Check multiple indicators
+  if (process.env.VERCEL || process.env.VERCEL_ENV) return true;
+  const cwd = process.cwd();
+  if (cwd === '/var/task') return true;
+  if (cwd.startsWith('/var/task/')) return true;
+  return false;
+}
+
+function getJobsDir(): string {
+  if (isVercelEnvironment()) {
+    return path.join('/tmp', '.leadgen-jobs');
+  }
+  return path.join(process.cwd(), ".leadgen-jobs");
+}
+
 function ensureJobsDir() {
-  // Double-check: never create directories in /var/task (Vercel)
-  const currentDir = process.cwd();
-  if (currentDir === '/var/task' || !USE_FILE_SYSTEM || typeof fs.existsSync === "undefined") {
+  // Always check at runtime
+  if (isVercelEnvironment() || typeof fs.existsSync === "undefined") {
     return;
   }
   
-  // Additional safety: check if path contains /var/task
-  if (JOBS_DIR.includes('/var/task')) {
-    console.warn('[job-store] Skipping directory creation in /var/task (Vercel)');
+  const jobsDir = getJobsDir();
+  
+  // Final safety check: never create directories in /var/task
+  if (jobsDir.includes('/var/task')) {
+    console.warn('[job-store] Blocked: attempted to create dir in /var/task:', jobsDir);
     return;
   }
   
   try {
-    if (!fs.existsSync(JOBS_DIR)) {
-      fs.mkdirSync(JOBS_DIR, { recursive: true });
+    if (!fs.existsSync(jobsDir)) {
+      fs.mkdirSync(jobsDir, { recursive: true });
     }
   } catch (error) {
     // If directory creation fails (e.g., in strict serverless), use in-memory only
@@ -40,7 +50,7 @@ function ensureJobsDir() {
 }
 
 function jobPath(jobId: string): string {
-  return path.join(JOBS_DIR, `${jobId}.json`);
+  return path.join(getJobsDir(), `${jobId}.json`);
 }
 
 export function createJob(
@@ -63,14 +73,15 @@ export function createJob(
     input,
   };
   MEMORY.set(jobId, job);
-  if (USE_FILE_SYSTEM) {
+  // Always check at runtime
+  if (!isVercelEnvironment()) {
     try {
       ensureJobsDir();
-      fs.writeFileSync(
-        jobPath(jobId),
-        JSON.stringify(job, null, 2),
-        "utf-8"
-      );
+      const filePath = jobPath(jobId);
+      // Final safety check before writing
+      if (!filePath.includes('/var/task') && fs.writeFileSync) {
+        fs.writeFileSync(filePath, JSON.stringify(job, null, 2), "utf-8");
+      }
     } catch (e) {
       console.error("Job store write error:", e);
     }
@@ -84,11 +95,12 @@ export function getJob(jobId: string): (LeadgenJobResult & { input?: LeadgenJobI
   const mem = MEMORY.get(jobId);
   if (mem) return mem;
   
-  // Try file system only if not in Vercel
-  if (USE_FILE_SYSTEM) {
+  // Always check at runtime
+  if (!isVercelEnvironment()) {
     try {
       const fp = jobPath(jobId);
-      if (typeof fs.existsSync !== "undefined" && fs.existsSync(fp)) {
+      // Final safety check before reading
+      if (!fp.includes('/var/task') && typeof fs.existsSync !== "undefined" && fs.existsSync(fp)) {
         const raw = fs.readFileSync(fp, "utf-8");
         const job = JSON.parse(raw) as LeadgenJobResult & { input?: LeadgenJobInput };
         MEMORY.set(jobId, job);
@@ -114,14 +126,15 @@ export function updateJob(
     updated_at: new Date().toISOString(),
   };
   MEMORY.set(jobId, updated);
-  if (USE_FILE_SYSTEM) {
+  // Always check at runtime
+  if (!isVercelEnvironment()) {
     try {
       ensureJobsDir();
-      fs.writeFileSync(
-        jobPath(jobId),
-        JSON.stringify(updated, null, 2),
-        "utf-8"
-      );
+      const filePath = jobPath(jobId);
+      // Final safety check before writing
+      if (!filePath.includes('/var/task') && fs.writeFileSync) {
+        fs.writeFileSync(filePath, JSON.stringify(updated, null, 2), "utf-8");
+      }
     } catch (e) {
       console.error("Job store update error:", e);
     }
