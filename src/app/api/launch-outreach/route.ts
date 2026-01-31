@@ -12,6 +12,7 @@ import {
 } from "@/lib/demo-import-storage";
 import { createJob, generateJobId } from "@/lib/leadgen/job-store";
 import type { LeadgenJobInput, Icp, IcpGeo, IcpPositions, IcpCompanySize, SegmentIcp } from "@/lib/leadgen/types";
+import { runLeadgenWorker } from "@/lib/leadgen/leadgen-worker";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -175,13 +176,13 @@ export async function POST(req: Request) {
     };
     createJob(job_id, input);
 
-    // Не вызываем /api/leadgen/run отсюда: на Vercel функция завершается после return,
-    // и фоновый fetch часто не успевает выполниться. Запуск делается с клиента (см. page.tsx).
+    // Запускаем воркер здесь и ждём — так лиды гарантированно попадают в файл (не зависим от второго запроса с клиента).
+    await runLeadgenWorker(job_id, input);
+
     const res = NextResponse.json({
       success: true,
       key: objectKey,
       job_id,
-      input,
     });
     res.cookies.set("demo_st_minio_id", objectKey, {
       path: "/",
