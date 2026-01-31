@@ -64,6 +64,14 @@ export default function Page() {
     company_size: "",
   });
   const [showIcpEdit, setShowIcpEdit] = useState(false);
+  const [leadgenJobId, setLeadgenJobId] = useState<string | null>(null);
+  const [leadgenStatus, setLeadgenStatus] = useState<"idle" | "running" | "done" | "error">("idle");
+  const [leadgenResult, setLeadgenResult] = useState<{
+    leads_count?: number;
+    minio_object_key?: string;
+    download_csv_url?: string | null;
+    error?: string | null;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatMessagesEndRef = useRef<HTMLDivElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
@@ -279,6 +287,99 @@ export default function Page() {
       }
     } catch (_) {}
   }, [targetAudience, step, apiData]);
+
+  // Map targetAudience (UI) to leadgen API icp format
+  function targetAudienceToIcp(ta: TargetAudience) {
+    const countries = ta.geo ? ta.geo.split(",").map((s) => s.trim()).filter(Boolean) : undefined;
+    const industries = ta.industry ? ta.industry.split(",").map((s) => s.trim()).filter(Boolean) : undefined;
+    const employeeRanges = ta.company_size
+      ? ta.company_size.split(",").map((s) => s.trim()).map((part) => {
+          if (part.includes("-")) return part.replace("-", ",");
+          if (part.endsWith("+")) return part.replace("+", ",").replace(/\d+/, (m) => m + ",") || "501,";
+          return part;
+        }).filter(Boolean)
+      : undefined;
+    return {
+      icp: {
+        geo: countries?.length ? { countries } : undefined,
+        positions: ta.positions.length ? { titles_strict: ta.positions } : undefined,
+        industries: industries?.length ? industries : undefined,
+        company_size: employeeRanges?.length ? { employee_ranges: employeeRanges } : undefined,
+      },
+    };
+  }
+
+  async function runLeadgen() {
+    if (!apiData?.segments?.length) {
+      alert("No segments yet. Complete generation first.");
+      return;
+    }
+    setLeadgenStatus("running");
+    setLeadgenResult(null);
+    setLeadgenJobId(null);
+    try {
+      const { icp } = targetAudienceToIcp(targetAudience);
+      const finalProductName = productName || initialInput || apiData?.product_name || "Product";
+      const description = [productUTPs, productMetrics].flat().slice(0, 4).join(". ") || "Product details";
+      const minio_payload = {
+        product: {
+          name: finalProductName,
+          description: description.substring(0, 500),
+          goal_type: "MANUAL_GOAL",
+          goal_description: "Надо забукать с ним кол, попроси его прислать удобные слоты для созвона или его календли",
+        },
+        segments: apiData.segments.map((seg: { name?: string; personalization_ideas?: string; personalization?: string }) => ({
+          name: seg.name || "Segment",
+          personalization: seg.personalization_ideas || seg.personalization || "",
+        })),
+      };
+      const createRes = await fetch("/api/leadgen", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          icp,
+          limits: { target_leads: 50, max_runtime_ms: 45000 },
+          minio_payload,
+        }),
+      });
+      const createJson = await createRes.json();
+      if (!createRes.ok || !createJson.job_id) {
+        throw new Error(createJson.error || "Failed to create leadgen job");
+      }
+      const jobId = createJson.job_id;
+      setLeadgenJobId(jobId);
+      await fetch("/api/leadgen/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_id: jobId }),
+      });
+      const pollStart = Date.now();
+      const pollMax = 60000;
+      while (Date.now() - pollStart < pollMax) {
+        const getRes = await fetch(`/api/leadgen/${jobId}`);
+        const data = await getRes.json();
+        setLeadgenResult({
+          leads_count: data.leads_count,
+          minio_object_key: data.minio_object_key,
+          download_csv_url: data.download_csv_url,
+          error: data.error,
+        });
+        if (data.status === "done" || data.status === "failed") {
+          setLeadgenStatus(data.status === "done" ? "done" : "error");
+          if (data.status === "done" && data.minio_object_key) {
+            setCookie("demo_st_minio_id", data.minio_object_key, 30);
+          }
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 2500));
+      }
+      setLeadgenStatus("error");
+      setLeadgenResult((prev) => ({ ...prev, error: "Timeout waiting for leads" }));
+    } catch (e: unknown) {
+      setLeadgenStatus("error");
+      setLeadgenResult({ error: e instanceof Error ? e.message : "Unknown error" });
+    }
+  }
 
   const steps = useMemo(
     () => [
@@ -1926,6 +2027,85 @@ export default function Page() {
                                 className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
                               />
                             </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Get leads (Apollo) — saves to MinIO when done */}
+                  <div className="animate-fade-in-up">
+                    <Card className="border-zinc-200 bg-white/90 shadow-lg backdrop-blur-md">
+                      <CardContent className="p-6">
+                        <h3 className="text-lg font-semibold text-zinc-900 mb-1">Lead list (Apollo)</h3>
+                        <p className="text-xs text-zinc-500 mb-4">
+                          Get leads by ICP. When finished, a file with LinkedIn URLs is saved to MinIO (demo-imports/) and CSV is available for download.
+                        </p>
+                        {leadgenStatus === "idle" && (
+                          <Button
+                            type="button"
+                            className="rounded-lg bg-zinc-900 text-white hover:bg-zinc-800"
+                            onClick={runLeadgen}
+                          >
+                            Get leads (Apollo)
+                          </Button>
+                        )}
+                        {leadgenStatus === "running" && (
+                          <div className="flex items-center gap-2 text-sm text-zinc-600">
+                            <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-600" />
+                            Collecting leads… (up to ~45 sec)
+                          </div>
+                        )}
+                        {leadgenStatus === "done" && leadgenResult && (
+                          <div className="space-y-2 text-sm text-zinc-800">
+                            <p>
+                              <span className="font-medium">Leads:</span> {leadgenResult.leads_count ?? 0}
+                            </p>
+                            {leadgenResult.minio_object_key && (
+                              <p>
+                                <span className="font-medium">Saved to MinIO:</span> demo-imports/{leadgenResult.minio_object_key}
+                              </p>
+                            )}
+                            {leadgenResult.download_csv_url && (
+                              <a
+                                href={leadgenResult.download_csv_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 underline"
+                              >
+                                Download CSV
+                              </a>
+                            )}
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="mt-2"
+                              onClick={() => {
+                                setLeadgenStatus("idle");
+                                setLeadgenResult(null);
+                                setLeadgenJobId(null);
+                              }}
+                            >
+                              Run again
+                            </Button>
+                          </div>
+                        )}
+                        {leadgenStatus === "error" && leadgenResult?.error && (
+                          <div className="text-sm text-red-600">
+                            {leadgenResult.error}
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="ml-2 mt-2"
+                              onClick={() => {
+                                setLeadgenStatus("idle");
+                                setLeadgenResult(null);
+                              }}
+                            >
+                              Retry
+                            </Button>
                           </div>
                         )}
                       </CardContent>
