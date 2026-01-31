@@ -23,13 +23,6 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
-    if (!input) {
-      console.error("[leadgen/run] ERROR: no input provided for job_id=" + job_id);
-      return NextResponse.json(
-        { error: "input required (Vercel serverless cannot use job-store)" },
-        { status: 400 }
-      );
-    }
     await runLeadgenWorker(job_id, input);
     const elapsed = Date.now() - startTime;
     console.log("[leadgen/run] FINISHED job_id=" + job_id + " elapsed_ms=" + elapsed);
