@@ -169,7 +169,7 @@ export async function POST(req: Request) {
       job_id,
       icp: baseIcp,
       ...(segment_icps.length > 0 && { segment_icps }),
-      limits: { target_leads: 50, max_runtime_ms: 55000 },
+      limits: { target_leads: 30, max_runtime_ms: 25000 },
       minio_payload,
       minio_key_to_update: objectKey,
     };

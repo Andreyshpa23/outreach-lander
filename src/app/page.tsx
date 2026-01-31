@@ -320,19 +320,12 @@ export default function Page() {
       if (res.ok && data.success && data.key) {
         setCookie("demo_st_minio_id", data.key, 30);
         if (data.job_id && data.input) {
-          try {
-            const runRes = await fetch("/api/leadgen/run", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ job_id: data.job_id, input: data.input }),
-            });
-            if (!runRes.ok) {
-              const errText = await runRes.text().catch(() => "");
-              console.error("[leadgen/run] failed", runRes.status, errText);
-            }
-          } catch (e) {
-            console.error("[leadgen/run] error", e);
-          }
+          fetch("/api/leadgen/run", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ job_id: data.job_id, input: data.input }),
+            keepalive: true,
+          }).catch((e) => console.error("[leadgen/run] error", e));
         }
         setShowAuthModal(true);
       } else {
