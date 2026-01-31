@@ -1,30 +1,17 @@
 <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="iconGradient" x1="0%" y1="50%" x2="100%" y2="50%">
-      <stop offset="0%" stop-color="#3B82F6"/>
-      <stop offset="40%" stop-color="#8B5CF6"/>
-      <stop offset="70%" stop-color="#F97316"/>
-      <stop offset="100%" stop-color="#EF4444"/>
-    </linearGradient>
-    <radialGradient id="iconRadial" cx="50%" cy="50%">
-      <stop offset="0%" stop-color="#3B82F6" stop-opacity="0.8"/>
-      <stop offset="50%" stop-color="#8B5CF6" stop-opacity="0.6"/>
-      <stop offset="100%" stop-color="#F97316" stop-opacity="0.4"/>
-    </radialGradient>
-  </defs>
-  
   <!-- Background -->
   <rect width="32" height="32" rx="6" fill="white"/>
   
-  <!-- Outer dark circle -->
+  <!-- Outer dark circle background -->
   <circle cx="16" cy="16" r="15" fill="#1F2937"/>
   
-  <!-- Swirling pattern inside - S-like curve with gradient -->
-  <path d="M 4 16 Q 6 4, 16 6 Q 26 8, 28 16 Q 26 24, 16 28 Q 6 24, 4 16" fill="url(#iconGradient)" opacity="0.9"/>
+  <!-- Three concentric arcs (open on right, aligned left) -->
+  <!-- Outermost dark arc -->
+  <path d="M 4 16 A 12 12 0 0 0 16 4" stroke="#1F2937" stroke-width="2" fill="none" stroke-linecap="round"/>
   
-  <!-- Additional gradient overlay for depth -->
-  <circle cx="16" cy="16" r="11" fill="url(#iconRadial)" opacity="0.7"/>
+  <!-- Middle orange-red arc (prominent) -->
+  <path d="M 6 16 A 10 10 0 0 0 16 6" stroke="#F97316" stroke-width="2.5" fill="none" stroke-linecap="round"/>
   
-  <!-- Inner highlight -->
-  <ellipse cx="14" cy="14" rx="4" ry="6" fill="#3B82F6" opacity="0.3"/>
+  <!-- Innermost dark arc -->
+  <path d="M 8 16 A 8 8 0 0 0 16 8" stroke="#1F2937" stroke-width="1.5" fill="none" stroke-linecap="round"/>
 </svg>
