@@ -379,6 +379,17 @@ export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJob
 
   const totalLinkedIn = segmentLinkedInUrls.flat().length;
   console.log("[leadgen] done leads=" + allLeads.length + " linkedin_total=" + totalLinkedIn + " apollo_requests=" + totalApolloRequests + " partial=" + partialDueToTimeout);
+  
+  // Debug: log per-segment LinkedIn URLs count
+  if (segmentLinkedInUrls.length > 0) {
+    segmentLinkedInUrls.forEach((urls, idx) => {
+      const segName = minioPayload?.segments?.[idx]?.name ?? `segment_${idx}`;
+      console.log(`[leadgen] segment "${segName}": ${urls.length} LinkedIn URLs`);
+      if (urls.length === 0 && allLeads.length > 0) {
+        console.warn(`[leadgen] ⚠️ Segment "${segName}" has 0 LinkedIn URLs but leads were collected. Enrichment may have failed.`);
+      }
+    });
+  }
 
   let download_csv_url: string | null = null;
   let minio_object_key: string | null = null;
@@ -423,9 +434,17 @@ export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJob
       };
       const totalLeads = segmentLinkedInUrls.flat().length;
       console.log("[leadgen] MinIO overwrite START key=" + minioKeyToUpdate + " totalLeads=" + totalLeads);
+      
+      // Debug: log payload before saving
+      const payloadLeadsCount = payload.segments.reduce((sum, seg) => sum + (seg.leads?.length ?? 0), 0);
+      console.log(`[leadgen] Payload to save: ${payload.segments.length} segments, ${payloadLeadsCount} total LinkedIn URLs`);
+      payload.segments.forEach((seg, i) => {
+        console.log(`[leadgen]   Segment ${i} "${seg.name}": ${seg.leads?.length ?? 0} LinkedIn URLs`);
+      });
+      
       const { objectKey } = await uploadDemoImportToS3(payload, minioKeyToUpdate);
       minio_object_key = objectKey;
-      console.log("[leadgen] MinIO overwrite DONE objectKey=" + objectKey);
+      console.log("[leadgen] MinIO overwrite DONE objectKey=" + objectKey + " totalLeadsInFile=" + payloadLeadsCount);
     } catch (e) {
       const errMsg = e instanceof Error ? e.message : String(e);
       minioError = errMsg;
