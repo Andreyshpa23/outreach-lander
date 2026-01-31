@@ -12,7 +12,6 @@ import {
 } from "@/lib/demo-import-storage";
 import { createJob, generateJobId } from "@/lib/leadgen/job-store";
 import type { LeadgenJobInput, Icp, IcpGeo, IcpPositions, IcpCompanySize, SegmentIcp } from "@/lib/leadgen/types";
-import { runLeadgenWorker } from "@/lib/leadgen/leadgen-worker";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -176,13 +175,11 @@ export async function POST(req: Request) {
     };
     createJob(job_id, input);
 
-    // Ждём завершения воркера — ответ клиенту только после перезаписи файла в MinIO.
-    await runLeadgenWorker(job_id, input);
-
     const res = NextResponse.json({
       success: true,
       key: objectKey,
       job_id,
+      input,
     });
     res.cookies.set("demo_st_minio_id", objectKey, {
       path: "/",
