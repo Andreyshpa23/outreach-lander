@@ -27,6 +27,21 @@ export interface RunSearchResult {
   partialDueToTimeout: boolean;
 }
 
+/** Check if ICP has any meaningful content */
+function isIcpEmpty(icp: Icp): boolean {
+  const hasGeo = (icp.geo?.countries?.length ?? 0) > 0 ||
+                 (icp.geo?.regions?.length ?? 0) > 0 ||
+                 (icp.geo?.cities?.length ?? 0) > 0;
+  const hasPositions = (icp.positions?.titles_strict?.length ?? 0) > 0 ||
+                      (icp.positions?.titles_broad?.length ?? 0) > 0 ||
+                      (icp.positions?.seniority?.length ?? 0) > 0 ||
+                      (icp.positions?.departments?.length ?? 0) > 0;
+  const hasIndustries = (icp.industries?.length ?? 0) > 0;
+  const hasKeywords = (icp.industry_keywords?.length ?? 0) > 0;
+  const hasCompanySize = (icp.company_size?.employee_ranges?.length ?? 0) > 0;
+  return !hasGeo && !hasPositions && !hasIndustries && !hasKeywords && !hasCompanySize;
+}
+
 /** Один прогон Apollo по ICP: поиск + обогащение, возвращает ссылки и лиды. */
 async function runSearchForIcp(
   icp: Icp,
@@ -36,9 +51,11 @@ async function runSearchForIcp(
   segmentLabel?: string
 ): Promise<RunSearchResult> {
   let resolvedIcp = icp;
-  if (Object.keys(icp).length === 0 && productName) {
+  if (isIcpEmpty(icp) && productName) {
     resolvedIcp = { ...icp, industry_keywords: [productName] };
+    console.log("[leadgen] empty ICP for", segmentLabel || "segment", ", fallback to productName:", productName);
   }
+  console.log("[leadgen] runSearchForIcp", segmentLabel || "-", "icp:", JSON.stringify(resolvedIcp).slice(0, 300));
   const seen = new Set<string>();
   const leads: Lead[] = [];
   const wideningStepsApplied: string[] = [];
@@ -190,12 +207,8 @@ export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJob
       if (segmentLinkedInUrls[i] == null) segmentLinkedInUrls[i] = [];
     }
   } else {
-    let icp = input.icp;
-    if (Object.keys(icp).length === 0 && productName) {
-      icp = { ...icp, industry_keywords: [productName] };
-      console.log("[leadgen] empty ICP, fallback q_keywords from product name");
-    }
-    console.log("[leadgen] job_id=" + jobId + " single ICP minio_key_to_update=" + (input as LeadgenJobInput).minio_key_to_update);
+    const icp = input.icp;
+    console.log("[leadgen] job_id=" + jobId + " single ICP (no segment_icps) minio_key_to_update=" + (input as LeadgenJobInput).minio_key_to_update);
     try {
       const result = await runSearchForIcp(icp, targetLeads, deadline, productName);
       segmentLinkedInUrls = (minioPayload?.segments ?? []).map(() => result.linkedin_urls);
