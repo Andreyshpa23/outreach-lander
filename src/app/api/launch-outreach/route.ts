@@ -141,8 +141,9 @@ export async function POST(req: Request) {
     return res;
   } catch (err: unknown) {
     console.error("Launch outreach error:", err);
+    const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json(
-      { success: false, error: err instanceof Error ? err.message : "Unknown error" },
+      { success: false, error: message },
       { status: 500 }
     );
   }

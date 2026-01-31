@@ -53,13 +53,11 @@ export async function POST(req: Request) {
     });
 
     return res;
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Error in /api/demo-import:", err);
+    const message = err instanceof Error ? err.message : "Failed to process demo import request";
     return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to process demo import request",
-      },
+      { success: false, error: message },
       { status: 500 }
     );
   }
