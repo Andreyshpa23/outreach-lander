@@ -37,6 +37,12 @@
 
 UI MinIO: порт 9001. Для приложения нужен API: порт 9000.
 
+**Важно:** без этих четырёх переменных в Vercel (Production) в MinIO с продакшена ничего не попадёт — и demo-import, и leadgen используют одни и те же `MINIO_ENDPOINT`, `MINIO_BUCKET`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY` (логика и пароль).
+
+**Проверка записи на проде:** открой в браузере  
+`https://твой-домен/api/test-minio-write`  
+Если в ответе `success: true` и есть `key` — запись в MinIO по логике и учётным данным работает. Потом открой MinIO → бакет → demo-imports/ и увидишь файл `test-write-*.json`.
+
 ### Где что лежит в бакете
 
 | Путь в бакете | Что там | Кто пишет |
