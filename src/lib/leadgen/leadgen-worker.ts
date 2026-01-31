@@ -1,5 +1,7 @@
 /**
  * Leadgen worker: progressive widening, Apollo search, dedupe, CSV upload.
+ * При segment_icps — разный ICP на сегмент, ищем разных людей по сегментам.
+ * В MinIO только leads (ссылки на LinkedIn), без leads_detail.
  */
 
 import type { LeadgenJobInput, Lead, Icp, WideningStep } from "./types";
@@ -17,46 +19,41 @@ const MAX_RUNTIME_MS_DEFAULT = 45000;
 const PER_PAGE = 100;
 const PREVIEW_SIZE = 50;
 
-export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJobInput): Promise<void> {
-  const job = inputOverride ? null : getJob(jobId);
-  const input = inputOverride ?? job?.input;
-  if (!input) {
-    if (!inputOverride) updateJob(jobId, { status: "failed", error: "Job or input not found" });
-    return;
-  }
-  if (!inputOverride && job && job.status !== "queued") {
-    return;
-  }
-  if (!inputOverride) {
-    updateJob(jobId, { status: "running" });
-  }
-  let icp = input.icp;
-  if (Object.keys(icp).length === 0 && (input as LeadgenJobInput).minio_payload?.product?.name) {
-    icp = { ...icp, industry_keywords: [(input as LeadgenJobInput).minio_payload!.product.name] };
-    console.log("[leadgen] empty ICP, fallback q_keywords from product name");
-  }
-  const targetLeads = input.limits?.target_leads ?? TARGET_LEADS_DEFAULT;
-  const maxRuntimeMs = input.limits?.max_runtime_ms ?? MAX_RUNTIME_MS_DEFAULT;
-  const deadline = Date.now() + maxRuntimeMs;
+export interface RunSearchResult {
+  linkedin_urls: string[];
+  leads: Lead[];
+  apolloRequests: number;
+  wideningStepsApplied: string[];
+  partialDueToTimeout: boolean;
+}
 
+/** Один прогон Apollo по ICP: поиск + обогащение, возвращает ссылки и лиды. */
+async function runSearchForIcp(
+  icp: Icp,
+  targetLeads: number,
+  deadline: number,
+  productName: string,
+  segmentLabel?: string
+): Promise<RunSearchResult> {
+  let resolvedIcp = icp;
+  if (Object.keys(icp).length === 0 && productName) {
+    resolvedIcp = { ...icp, industry_keywords: [productName] };
+  }
   const seen = new Set<string>();
   const leads: Lead[] = [];
   const wideningStepsApplied: string[] = [];
   let apolloRequests = 0;
   let partialDueToTimeout = false;
-
   const steps = getWideningSteps();
-  console.log("[leadgen] job_id=" + jobId + " icp_keys=" + JSON.stringify(Object.keys(icp)) + " minio_key_to_update=" + (input as LeadgenJobInput).minio_key_to_update);
 
   for (const step of steps) {
     if (Date.now() >= deadline) {
-      console.log("[leadgen] deadline reached, stopping. leads=" + leads.length + " apollo_requests=" + apolloRequests);
       partialDueToTimeout = true;
       break;
     }
     if (leads.length >= targetLeads) break;
 
-    const filters = mapIcpToApolloFilters(icp, step as WideningStep);
+    const filters = mapIcpToApolloFilters(resolvedIcp, step as WideningStep);
     const hasFilters = Object.keys(filters).some((k) => {
       const v = (filters as Record<string, unknown>)[k];
       if (Array.isArray(v)) return v.length > 0;
@@ -69,59 +66,34 @@ export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJob
     }
 
     wideningStepsApplied.push(step);
-    console.log("[leadgen] step=" + step + " filters=" + JSON.stringify(Object.keys(filters)));
     let page = 1;
     let hasMore = true;
 
     while (hasMore && leads.length < targetLeads && Date.now() < deadline) {
-      try {
-        const res = await searchPeople(filters, page, PER_PAGE);
-        apolloRequests++;
-
-        const people = (res.people ?? []) as ApolloPerson[];
-        if (people.length === 0) {
-          hasMore = false;
-          break;
-        }
-
-        for (const person of people) {
-          const lead = normalizePerson(person);
-          if (!isLeadValid(lead)) continue;
-          const dedupeKey = lead.linkedin_url || lead.apollo_person_id;
-          if (!dedupeKey || seen.has(dedupeKey)) continue;
-          seen.add(dedupeKey);
-          leads.push(lead);
-          if (leads.length >= targetLeads) break;
-        }
-
-        const totalPages = (res.pagination as { total_pages?: number })?.total_pages ?? 1;
-        if (page >= totalPages || people.length < PER_PAGE) {
-          hasMore = false;
-        } else {
-          page++;
-        }
-      } catch (e) {
-        const errMsg = e instanceof Error ? e.message : String(e);
-        updateJob(jobId, {
-          status: "failed",
-          error: errMsg,
-          leads_count: leads.length,
-          leads_preview: leads.slice(0, PREVIEW_SIZE),
-          download_csv_url: null,
-          debug: {
-            apollo_requests: apolloRequests,
-            widening_steps_applied: wideningStepsApplied,
-          },
-        });
-        return;
+      const res = await searchPeople(filters, page, PER_PAGE);
+      apolloRequests++;
+      const people = (res.people ?? []) as ApolloPerson[];
+      if (people.length === 0) {
+        hasMore = false;
+        break;
       }
+      for (const person of people) {
+        const lead = normalizePerson(person);
+        if (!isLeadValid(lead)) continue;
+        const dedupeKey = lead.linkedin_url || lead.apollo_person_id;
+        if (!dedupeKey || seen.has(dedupeKey)) continue;
+        seen.add(dedupeKey);
+        leads.push(lead);
+        if (leads.length >= targetLeads) break;
+      }
+      const totalPages = (res.pagination as { total_pages?: number })?.total_pages ?? 1;
+      if (page >= totalPages || people.length < PER_PAGE) hasMore = false;
+      else page++;
     }
-
     if (leads.length >= targetLeads) break;
   }
 
   const finalLeads = leads.slice(0, targetLeads);
-  // Поиск Apollo бесплатен (находим людей). LinkedIn и полный профиль — только через enrich (тратит кредиты). Обязательно прогоняем всех без linkedin_url.
   const enrichLimit = Math.min(
     Math.max(0, parseInt(process.env.APOLLO_ENRICH_FOR_LINKEDIN_LIMIT ?? String(targetLeads), 10) || targetLeads),
     targetLeads
@@ -154,68 +126,142 @@ export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJob
         enriched++;
       }
     }
-    if (enriched > 0) console.log("[leadgen] enriched", enriched, "of", attempted, "leads with LinkedIn via People Enrichment");
-    else if (withoutLinkedIn.length > 0) console.log("[leadgen] enrichment attempted", attempted, "leads, 0 LinkedIn URLs returned (check Apollo credits / people/match response)");
+    if (segmentLabel && enriched > 0) console.log("[leadgen] segment=" + segmentLabel + " enriched " + enriched + " with LinkedIn");
   }
-  const linkedin_urls = finalLeads
-    .map((l) => onlyLinkedInUrl(l.linkedin_url))
-    .filter(Boolean);
-  console.log("[leadgen] done leads_count=" + finalLeads.length + " linkedin_urls=" + linkedin_urls.length + " apollo_requests=" + apolloRequests + " partial_due_to_timeout=" + partialDueToTimeout);
+  const linkedin_urls = finalLeads.map((l) => onlyLinkedInUrl(l.linkedin_url)).filter(Boolean);
+  return { linkedin_urls, leads: finalLeads, apolloRequests, wideningStepsApplied, partialDueToTimeout };
+}
+
+export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJobInput): Promise<void> {
+  const job = inputOverride ? null : getJob(jobId);
+  const input = inputOverride ?? job?.input;
+  if (!input) {
+    if (!inputOverride) updateJob(jobId, { status: "failed", error: "Job or input not found" });
+    return;
+  }
+  if (!inputOverride && job && job.status !== "queued") {
+    return;
+  }
+  if (!inputOverride) {
+    updateJob(jobId, { status: "running" });
+  }
+
+  const targetLeads = input.limits?.target_leads ?? TARGET_LEADS_DEFAULT;
+  const maxRuntimeMs = input.limits?.max_runtime_ms ?? MAX_RUNTIME_MS_DEFAULT;
+  const deadline = Date.now() + maxRuntimeMs;
+  const minioPayload = (input as LeadgenJobInput).minio_payload;
+  const productName = minioPayload?.product?.name ?? "";
+
+  let segmentLinkedInUrls: string[][] = [];
+  let allLeads: Lead[] = [];
+  let totalApolloRequests = 0;
+  const allWideningSteps: string[] = [];
+  let partialDueToTimeout = false;
+
+  if (input.segment_icps && input.segment_icps.length > 0) {
+    console.log("[leadgen] job_id=" + jobId + " per-segment ICP, segments=" + input.segment_icps.length);
+    for (const { segment_index, icp } of input.segment_icps) {
+      if (Date.now() >= deadline) break;
+      const segmentLabel = minioPayload?.segments?.[segment_index]?.name ?? "seg" + segment_index;
+      try {
+        const result = await runSearchForIcp(icp, targetLeads, deadline, productName, segmentLabel);
+        segmentLinkedInUrls[segment_index] = result.linkedin_urls;
+        allLeads = allLeads.concat(result.leads);
+        totalApolloRequests += result.apolloRequests;
+        result.wideningStepsApplied.forEach((s) => allWideningSteps.push(segmentLabel + ":" + s));
+        if (result.partialDueToTimeout) partialDueToTimeout = true;
+        console.log("[leadgen] segment=" + segmentLabel + " linkedin_urls=" + result.linkedin_urls.length);
+      } catch (e) {
+        const errMsg = e instanceof Error ? e.message : String(e);
+        updateJob(jobId, {
+          status: "failed",
+          error: "Segment " + segment_index + ": " + errMsg,
+          leads_count: allLeads.length,
+          leads_preview: allLeads.slice(0, PREVIEW_SIZE),
+          download_csv_url: null,
+          debug: { apollo_requests: totalApolloRequests, widening_steps_applied: allWideningSteps },
+        });
+        return;
+      }
+    }
+    // Выравниваем массив под индексы сегментов (могут быть пропуски)
+    const segmentsCount = minioPayload?.segments?.length ?? segmentLinkedInUrls.length;
+    for (let i = 0; i < segmentsCount; i++) {
+      if (segmentLinkedInUrls[i] == null) segmentLinkedInUrls[i] = [];
+    }
+  } else {
+    let icp = input.icp;
+    if (Object.keys(icp).length === 0 && productName) {
+      icp = { ...icp, industry_keywords: [productName] };
+      console.log("[leadgen] empty ICP, fallback q_keywords from product name");
+    }
+    console.log("[leadgen] job_id=" + jobId + " single ICP minio_key_to_update=" + (input as LeadgenJobInput).minio_key_to_update);
+    try {
+      const result = await runSearchForIcp(icp, targetLeads, deadline, productName);
+      segmentLinkedInUrls = (minioPayload?.segments ?? []).map(() => result.linkedin_urls);
+      allLeads = result.leads;
+      totalApolloRequests = result.apolloRequests;
+      allWideningSteps.push(...result.wideningStepsApplied);
+      partialDueToTimeout = result.partialDueToTimeout;
+    } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      updateJob(jobId, {
+        status: "failed",
+        error: errMsg,
+        leads_count: 0,
+        leads_preview: [],
+        download_csv_url: null,
+        debug: {},
+      });
+      return;
+    }
+  }
+
+  const totalLinkedIn = segmentLinkedInUrls.flat().length;
+  console.log("[leadgen] done leads=" + allLeads.length + " linkedin_total=" + totalLinkedIn + " apollo_requests=" + totalApolloRequests + " partial=" + partialDueToTimeout);
 
   let download_csv_url: string | null = null;
   let minio_object_key: string | null = null;
 
-  if (finalLeads.length > 0 && isStorageConfigured()) {
+  if (allLeads.length > 0 && isStorageConfigured()) {
     try {
       const csvFilename = getCsvFilename(jobId);
-      const csvBody = buildCsv(finalLeads);
+      const csvBody = buildCsv(allLeads);
       await uploadCsv(csvFilename, csvBody);
       download_csv_url = await getPresignedDownloadUrl(csvFilename);
-      console.log("[leadgen] CSV uploaded key=" + csvFilename + " rows=" + finalLeads.length);
+      console.log("[leadgen] CSV uploaded key=" + csvFilename + " rows=" + allLeads.length);
     } catch (e) {
       const errMsg = e instanceof Error ? e.message : String(e);
       console.error("[leadgen] CSV upload failed:", errMsg, e);
     }
-  } else if (finalLeads.length > 0 && !isStorageConfigured()) {
-    console.warn("[leadgen] CSV not uploaded: MinIO not configured (MINIO_ENDPOINT, MINIO_BUCKET, MINIO_ACCESS_KEY, MINIO_SECRET_KEY)");
   }
 
-  let minioError: string | undefined;
-  const minioPayload = (input as LeadgenJobInput).minio_payload;
   const minioKeyToUpdate = (input as LeadgenJobInput).minio_key_to_update;
   const shouldUpdateMinio =
     minioPayload?.product &&
     minioPayload?.segments?.length &&
-    (finalLeads.length > 0 || minioKeyToUpdate);
+    (totalLinkedIn > 0 || minioKeyToUpdate);
+  let minioError: string | undefined;
   if (shouldUpdateMinio) {
     try {
-      console.log("[leadgen] MinIO update key=" + minioKeyToUpdate + " leads_detail=" + finalLeads.length + " linkedin_urls=" + linkedin_urls.length);
-      const product = minioPayload!.product;
-      const leads_detail = finalLeads.map((l) => ({
-        linkedin_url: onlyLinkedInUrl(l.linkedin_url),
-        full_name: l.full_name,
-        title: l.title,
-        company_name: l.company_name,
-      }));
       const payload = {
         product: {
-          name: product.name,
-          description: product.description,
-          goal_type: product.goal_type || "MANUAL_GOAL",
-          goal_description: product.goal_description || "",
+          name: minioPayload!.product.name,
+          description: minioPayload!.product.description,
+          goal_type: minioPayload!.product.goal_type || "MANUAL_GOAL",
+          goal_description: minioPayload!.product.goal_description || "",
         },
-        segments: minioPayload!.segments.map((s) => ({
+        segments: minioPayload!.segments.map((s, i) => ({
           name: s.name,
           personalization: s.personalization,
-          leads: linkedin_urls,
-          leads_detail,
+          leads: segmentLinkedInUrls[i] ?? [],
           ...(s.outreach_personalization != null && { outreach_personalization: s.outreach_personalization }),
           ...(s.dialog_personalization != null && { dialog_personalization: s.dialog_personalization }),
         })),
       };
       const { objectKey } = await uploadDemoImportToS3(payload, minioKeyToUpdate);
       minio_object_key = objectKey;
-      console.log("[leadgen] MinIO updated objectKey=" + objectKey);
+      console.log("[leadgen] MinIO updated objectKey=" + objectKey + " (leads only, no leads_detail)");
     } catch (e) {
       const errMsg = e instanceof Error ? e.message : String(e);
       minioError = errMsg;
@@ -223,24 +269,25 @@ export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJob
     }
   }
 
+  const linkedin_urls = segmentLinkedInUrls.flat();
   updateJob(jobId, {
     status: "done",
-    icp_used: icp,
-    leads_count: finalLeads.length,
+    icp_used: input.icp,
+    leads_count: allLeads.length,
     linkedin_urls,
-    leads_preview: finalLeads.slice(0, PREVIEW_SIZE),
+    leads_preview: allLeads.slice(0, PREVIEW_SIZE),
     download_csv_url,
     minio_object_key: minio_object_key ?? undefined,
     debug: {
-      apollo_requests: apolloRequests,
-      widening_steps_applied: wideningStepsApplied,
+      apollo_requests: totalApolloRequests,
+      widening_steps_applied: allWideningSteps,
       partial_due_to_timeout: partialDueToTimeout,
       ...(minioError != null && { minio_error: minioError }),
     },
     error: partialDueToTimeout
-      ? `Stopped at ${finalLeads.length} leads due to timeout`
-      : finalLeads.length < targetLeads
-        ? `Collected ${finalLeads.length} leads (target ${targetLeads})`
+      ? `Stopped at ${allLeads.length} leads due to timeout`
+      : allLeads.length < targetLeads
+        ? `Collected ${allLeads.length} leads (target ${targetLeads})`
         : null,
   });
 }

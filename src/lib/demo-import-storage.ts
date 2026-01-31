@@ -4,24 +4,14 @@ import { getMinioClient, getDemoImportPrefix } from "@/lib/minio-config";
 /**
  * Итоговый формат JSON в MinIO (demo-imports или корень по MINIO_DEMO_PREFIX):
  * - product: name, description, goal_type (MANUAL_GOAL), goal_description
- * - segments: name, personalization, leads (массив LinkedIn URL), опционально leads_detail (полные объекты лидов), outreach_personalization, dialog_personalization
+ * - segments: name, personalization, leads (массив LinkedIn URL), outreach_personalization, dialog_personalization.
+ *   Только ссылки на лидов (leads), без leads_detail.
  */
-export interface DemoImportLeadDetail {
-  linkedin_url: string;
-  full_name: string;
-  title: string;
-  company_name: string;
-  /** Ссылка на профиль в Apollo, если LinkedIn недоступен */
-  apollo_profile_url?: string;
-}
-
 export interface DemoImportSegment {
   name: string;
   personalization: string;
-  /** Ссылки на LinkedIn (обязательно для формата) */
+  /** Ссылки на LinkedIn (массив URL) */
   leads: string[];
-  /** Полные данные лидов: имя, должность, компания, LinkedIn — для итогового файла от leadgen */
-  leads_detail?: DemoImportLeadDetail[];
   outreach_personalization?: string;
   dialog_personalization?: string;
 }

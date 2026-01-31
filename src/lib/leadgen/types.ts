@@ -39,10 +39,18 @@ export interface LeadgenMinioPayload {
   segments: Array<{ name: string; personalization: string; outreach_personalization?: string; dialog_personalization?: string }>;
 }
 
+/** ICP для одного сегмента — чтобы искать разных людей по разным фильтрам. */
+export interface SegmentIcp {
+  segment_index: number;
+  icp: Icp;
+}
+
 export interface LeadgenJobInput {
   job_id?: string;
   icp: Icp;
   limits?: LeadgenLimits;
+  /** По сегментам: разные фильтры → разные люди. Если задано, воркер запускает поиск+enrich отдельно по каждому сегменту. */
+  segment_icps?: SegmentIcp[];
   /** Optional: for saving to MinIO with leads = LinkedIn URLs only */
   minio_payload?: LeadgenMinioPayload;
   /** If set, worker overwrites this MinIO object with leads (instead of creating new file) */

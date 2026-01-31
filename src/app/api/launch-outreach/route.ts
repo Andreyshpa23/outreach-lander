@@ -11,7 +11,7 @@ import {
   validateDemoImportPayload,
 } from "@/lib/demo-import-storage";
 import { createJob, generateJobId } from "@/lib/leadgen/job-store";
-import type { LeadgenJobInput, Icp, IcpGeo, IcpPositions, IcpCompanySize } from "@/lib/leadgen/types";
+import type { LeadgenJobInput, Icp, IcpGeo, IcpPositions, IcpCompanySize, SegmentIcp } from "@/lib/leadgen/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -47,6 +47,31 @@ function targetAudienceToIcp(ta: TargetAudienceBody): Icp {
   };
 }
 
+/** Из строки фильтров (linkedin_filters от промпта) — титулы и ключевые слова для сегмента. */
+function linkedinFiltersToIcpAddition(linkedinFilters: string | undefined): Partial<Icp> {
+  if (!linkedinFilters || typeof linkedinFilters !== "string") return {};
+  const tokens = linkedinFilters
+    .split(/[,;|]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (!tokens.length) return {};
+  const titles = tokens.slice(0, 5);
+  const keywords = tokens.length > 1 ? tokens : tokens;
+  return {
+    positions: { titles_strict: titles } as IcpPositions,
+    industry_keywords: keywords,
+  };
+}
+
+function mergeIcp(base: Icp, addition: Partial<Icp>): Icp {
+  return {
+    ...base,
+    ...addition,
+    positions: addition.positions ?? base.positions,
+    industry_keywords: [...(base.industry_keywords ?? []), ...(addition.industry_keywords ?? [])].filter(Boolean),
+  };
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -61,7 +86,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const segments = segmentsRaw.map((s: { name?: string; personalization?: string; personalization_ideas?: string }) => ({
+    const segments = segmentsRaw.map((s: { name?: string; personalization?: string; personalization_ideas?: string; linkedin_filters?: string }) => ({
       name: s.name || "Segment",
       personalization: s.personalization ?? s.personalization_ideas ?? "",
       leads: [] as string[],
@@ -103,7 +128,17 @@ export async function POST(req: Request) {
       throw uploadErr;
     }
 
-    const icp = target_audience ? targetAudienceToIcp(target_audience) : {};
+    const baseIcp = target_audience ? targetAudienceToIcp(target_audience) : {};
+    const segment_icps: SegmentIcp[] = [];
+    const hasFilters = segmentsRaw.some(
+      (s: { linkedin_filters?: string }) => s.linkedin_filters && String(s.linkedin_filters).trim()
+    );
+    if (hasFilters && segmentsRaw.length >= 2) {
+      segmentsRaw.forEach((s: { linkedin_filters?: string }, i: number) => {
+        const addition = linkedinFiltersToIcpAddition(s.linkedin_filters);
+        segment_icps.push({ segment_index: i, icp: mergeIcp(baseIcp, addition) });
+      });
+    }
     const job_id = generateJobId();
     const minio_payload = {
       product: payload.product,
@@ -111,7 +146,8 @@ export async function POST(req: Request) {
     };
     const input: LeadgenJobInput = {
       job_id,
-      icp,
+      icp: baseIcp,
+      ...(segment_icps.length > 0 && { segment_icps }),
       limits: { target_leads: 100, max_runtime_ms: 55000 },
       minio_payload,
       minio_key_to_update: objectKey,

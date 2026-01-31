@@ -2,7 +2,7 @@
 
 Мы дергаем **POST** `https://api.apollo.io/api/v1/mixed_people/api_search` с фильтрами в body.
 
-**Итоговый файл в MinIO (demo-imports):** payload в нужном формате — `product` (name, description, goal_type, goal_description) и `segments` с полями `name`, `personalization`, `leads` (массив LinkedIn URL), `leads_detail` (массив объектов: linkedin_url, full_name, title, company_name). Файл пишется в папку demo-imports (или в корень бакета, если MINIO_DEMO_PREFIX не задан).
+**Итоговый файл в MinIO (demo-imports):** payload в нужном формате — `product` (name, description, goal_type, goal_description) и `segments` с полями `name`, `personalization`, `leads` (массив LinkedIn URL). Только ссылки на лидов, без `leads_detail`. Файл пишется в папку demo-imports (или в корень бакета, если MINIO_DEMO_PREFIX не задан).
 
 ## Ответ Apollo (сырой)
 
@@ -76,18 +76,13 @@
     {
       "name": "...",
       "personalization": "...",
-      "leads": ["https://linkedin.com/in/...", ...],
-      "leads_detail": [
-        { "linkedin_url": "...", "full_name": "...", "title": "...", "company_name": "..." },
-        ...
-      ]
+      "leads": ["https://linkedin.com/in/...", ...]
     }
   ]
 }
 ```
 
-- `leads` — массив LinkedIn URL (обязательно).
-- `leads_detail` — полные данные лидов (имя, должность, компания, LinkedIn) для использования без отдельного CSV.
+- `leads` — массив LinkedIn URL (обязательно). Детали лидов не сохраняются в файле (только ссылки).
 
 ## Если в ответе Apollo нет LinkedIn
 
