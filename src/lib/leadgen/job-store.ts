@@ -30,6 +30,7 @@ export function createJob(
     status: "queued",
     icp_used: input.icp,
     leads_count: 0,
+    linkedin_urls: [],
     leads_preview: [],
     download_csv_url: null,
     debug: {},

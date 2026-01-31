@@ -63,6 +63,7 @@ export default function Page() {
     industry: "",
     company_size: "",
   });
+  const [showIcpEdit, setShowIcpEdit] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatMessagesEndRef = useRef<HTMLDivElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
@@ -774,6 +775,24 @@ export default function Page() {
       setProductMetrics(parsed.product_metrics);
     }
 
+    // Fill Target audience (ICP) from AI output (accept target_audience or targetAudience, snake_case or camelCase)
+    const rawTa = parsed.target_audience ?? (parsed as { targetAudience?: unknown }).targetAudience;
+    let extractedTa: TargetAudience | null = null;
+    if (rawTa && typeof rawTa === "object") {
+      const ta = rawTa as Record<string, unknown>;
+      const geo = typeof (ta.geo ?? ta.geography) === "string" ? String(ta.geo ?? ta.geography) : "";
+      const positions = Array.isArray(ta.positions) ? (ta.positions as unknown[]).filter((p): p is string => typeof p === "string") : [];
+      const industry = typeof (ta.industry) === "string" ? ta.industry : "";
+      const company_size = typeof (ta.company_size ?? ta.companySize) === "string" ? String(ta.company_size ?? ta.companySize) : "";
+      extractedTa = { geo, positions, industry, company_size };
+      setTargetAudience((prev) => ({
+        geo: geo || prev.geo,
+        positions: positions.length > 0 ? positions : prev.positions,
+        industry: industry || prev.industry,
+        company_size: company_size || prev.company_size,
+      }));
+    }
+
     // Save results to session and cookies - NEW FORMAT: X-Fast-Creation
     // Always save cookie, even if sessionId is not yet set
     // Get final product insights
@@ -810,6 +829,14 @@ export default function Page() {
         }))
       : [];
     
+    // Use extracted AI target_audience for cookie when available, else current state
+    const taForCookie = extractedTa ?? {
+      geo: targetAudience.geo,
+      positions: targetAudience.positions,
+      industry: targetAudience.industry,
+      company_size: targetAudience.company_size
+    };
+
     // Prepare new format data for X-Fast-Creation cookie (include target_audience for Apollo)
     const fastCreationData = {
       product: {
@@ -819,12 +846,7 @@ export default function Page() {
         goal_description: "Надо забукать с ним кол, попроси его прислать удобные слоты для созвона или его календли"
       },
       segments: segmentsData,
-      target_audience: {
-        geo: targetAudience.geo,
-        positions: targetAudience.positions,
-        industry: targetAudience.industry,
-        company_size: targetAudience.company_size
-      }
+      target_audience: taForCookie
     };
     
     // Save to X-Fast-Creation cookie (30 days) - ALWAYS save, regardless of sessionId
@@ -852,7 +874,7 @@ export default function Page() {
     // Continue with session save if sessionId exists
     if (sessionId) {
       
-      // Also keep full output data for internal use
+      // Also keep full output data for internal use (use AI-filled target_audience when available)
       const fullOutputData = {
         // Full API response with all segments, messages, filters, etc.
         apiData: parsed,
@@ -862,8 +884,8 @@ export default function Page() {
         productMetrics: finalMetrics,
         caseStudies: caseStudies.length > 0 ? caseStudies : (parsed.case_studies || []),
         
-        // Target audience (ICP) for Apollo / lead lists
-        targetAudience: targetAudience,
+        // Target audience (ICP) for Apollo / lead lists (AI-filled from parsed when present)
+        targetAudience: taForCookie,
         
         // Metadata
         sessionId: sessionId,
@@ -1791,63 +1813,121 @@ export default function Page() {
                 </Card>
                     </div>
 
-                  {/* Target audience (ICP) - for Apollo / lead lists */}
+                  {/* Target audience (ICP) - filled by AI; show read-only by default, inputs on Edit */}
                   <div className="animate-fade-in-up">
                     <Card className="border-zinc-200 bg-white/90 shadow-lg backdrop-blur-md">
                       <CardContent className="p-6">
-                        <div className="mb-4">
-                          <h3 className="text-lg font-semibold text-zinc-900">
-                            Target audience (ICP)
-                          </h3>
-                          <p className="text-xs text-zinc-500 mt-1">
-                            Define who to reach. Used for lead lists (e.g. Apollo).
-                          </p>
+                        <div className="mb-4 flex items-start justify-between gap-2">
+                          <div>
+                            <h3 className="text-lg font-semibold text-zinc-900">
+                              Target audience (ICP)
+                            </h3>
+                            <p className="text-xs text-zinc-500 mt-1">
+                              Filled by AI from your product. Used for lead lists (e.g. Apollo).
+                            </p>
+                          </div>
+                          {(
+                            targetAudience.geo ||
+                            targetAudience.positions.length > 0 ||
+                            targetAudience.industry ||
+                            targetAudience.company_size
+                          ) && !showIcpEdit ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="shrink-0 rounded-lg border-zinc-300 text-zinc-700"
+                              onClick={() => setShowIcpEdit(true)}
+                            >
+                              Edit
+                            </Button>
+                          ) : showIcpEdit ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="shrink-0 text-zinc-600"
+                              onClick={() => setShowIcpEdit(false)}
+                            >
+                              Done
+                            </Button>
+                          ) : null}
                         </div>
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          <div>
-                            <label className="text-xs font-medium text-zinc-600 block mb-1">Geography</label>
-                            <input
-                              type="text"
-                              value={targetAudience.geo}
-                              onChange={(e) => setTargetAudience((p) => ({ ...p, geo: e.target.value }))}
-                              placeholder="e.g. United States, Canada, UK"
-                              className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
-                            />
+                        {(
+                          targetAudience.geo ||
+                          targetAudience.positions.length > 0 ||
+                          targetAudience.industry ||
+                          targetAudience.company_size
+                        ) && !showIcpEdit ? (
+                          <div className="grid gap-3 sm:grid-cols-2 text-sm text-zinc-800">
+                            {targetAudience.geo && (
+                              <div>
+                                <span className="text-zinc-500 font-medium">Geography:</span> {targetAudience.geo}
+                              </div>
+                            )}
+                            {targetAudience.positions.length > 0 && (
+                              <div>
+                                <span className="text-zinc-500 font-medium">Job titles:</span> {targetAudience.positions.join(", ")}
+                              </div>
+                            )}
+                            {targetAudience.industry && (
+                              <div>
+                                <span className="text-zinc-500 font-medium">Industry:</span> {targetAudience.industry}
+                              </div>
+                            )}
+                            {targetAudience.company_size && (
+                              <div>
+                                <span className="text-zinc-500 font-medium">Company size:</span> {targetAudience.company_size}
+                              </div>
+                            )}
                           </div>
-                          <div>
-                            <label className="text-xs font-medium text-zinc-600 block mb-1">Job titles / positions</label>
-                            <input
-                              type="text"
-                              value={targetAudience.positions.join(", ")}
-                              onChange={(e) => setTargetAudience((p) => ({
-                                ...p,
-                                positions: e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
-                              }))}
-                              placeholder="e.g. CEO, Head of Sales, VP Marketing"
-                              className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
-                            />
+                        ) : (
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <div>
+                              <label className="text-xs font-medium text-zinc-600 block mb-1">Geography</label>
+                              <input
+                                type="text"
+                                value={targetAudience.geo}
+                                onChange={(e) => setTargetAudience((p) => ({ ...p, geo: e.target.value }))}
+                                placeholder="e.g. United States, Canada, UK"
+                                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs font-medium text-zinc-600 block mb-1">Job titles / positions</label>
+                              <input
+                                type="text"
+                                value={targetAudience.positions.join(", ")}
+                                onChange={(e) => setTargetAudience((p) => ({
+                                  ...p,
+                                  positions: e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
+                                }))}
+                                placeholder="e.g. CEO, Head of Sales, VP Marketing"
+                                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs font-medium text-zinc-600 block mb-1">Industry</label>
+                              <input
+                                type="text"
+                                value={targetAudience.industry}
+                                onChange={(e) => setTargetAudience((p) => ({ ...p, industry: e.target.value }))}
+                                placeholder="e.g. SaaS, Technology, Finance"
+                                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs font-medium text-zinc-600 block mb-1">Company size</label>
+                              <input
+                                type="text"
+                                value={targetAudience.company_size}
+                                onChange={(e) => setTargetAudience((p) => ({ ...p, company_size: e.target.value }))}
+                                placeholder="e.g. 1-50, 51-200, 500+"
+                                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
+                              />
+                            </div>
                           </div>
-                          <div>
-                            <label className="text-xs font-medium text-zinc-600 block mb-1">Industry</label>
-                            <input
-                              type="text"
-                              value={targetAudience.industry}
-                              onChange={(e) => setTargetAudience((p) => ({ ...p, industry: e.target.value }))}
-                              placeholder="e.g. SaaS, Technology, Finance"
-                              className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-xs font-medium text-zinc-600 block mb-1">Company size</label>
-                            <input
-                              type="text"
-                              value={targetAudience.company_size}
-                              onChange={(e) => setTargetAudience((p) => ({ ...p, company_size: e.target.value }))}
-                              placeholder="e.g. 1-50, 51-200, 500+"
-                              className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
-                            />
-                          </div>
-                        </div>
+                        )}
                       </CardContent>
                     </Card>
                   </div>

@@ -195,6 +195,17 @@ CRITICAL REQUIREMENTS:
 REMEMBER: You MUST include specific numbers/metrics from product_metrics in EVERY message. If no numbers are provided, note this but still try to be specific where possible. Numbers are what make messages interesting and credible.
 
 =====================
+TARGET AUDIENCE (ICP) - REQUIRED
+=====================
+
+Based on the product and segments, infer the ideal customer profile and fill target_audience. This is used for lead lists (e.g. Apollo). Use short, comma-separated values where applicable.
+
+- geo: string - main geography (e.g. "United States, Canada", "UK, Germany")
+- positions: array of strings - job titles (e.g. ["CEO", "VP Sales", "Head of Marketing"])
+- industry: string - industries (e.g. "SaaS, Technology", "Finance, Insurance")
+- company_size: string - employee ranges (e.g. "51-200, 201-500", "1-50, 51-200")
+
+=====================
 OUTPUT FORMAT (STRICT)
 =====================
 
@@ -207,6 +218,12 @@ OUTPUT FORMAT (STRICT)
   },
   "product_utps": ["string", "string", ...],
   "product_metrics": ["string", "string", ...],
+  "target_audience": {
+    "geo": "string",
+    "positions": ["string", "string", ...],
+    "industry": "string",
+    "company_size": "string"
+  },
   "segments": [
     {
       "name": "string",
@@ -300,10 +317,29 @@ OUTPUT FORMAT (STRICT)
     }
 
     // Remove ```json markdown wrapper
-    const cleaned = message
+    let cleaned = message
       .replace(/```json/g, "")
       .replace(/```/g, "")
       .trim();
+
+    // Ensure target_audience is always present so frontend can fill ICP (model sometimes omits it)
+    try {
+      const parsed = JSON.parse(cleaned) as Record<string, unknown>;
+      if (!parsed.target_audience || typeof parsed.target_audience !== "object") {
+        const segments = Array.isArray(parsed.segments) ? parsed.segments : [];
+        const firstSegment = segments[0] as Record<string, unknown> | undefined;
+        const linkedinFilters = typeof firstSegment?.linkedin_filters === "string" ? firstSegment.linkedin_filters : "";
+        parsed.target_audience = {
+          geo: "United States, Canada, UK",
+          positions: linkedinFilters ? linkedinFilters.split(/[,;|]/).map((s: string) => s.trim()).filter(Boolean).slice(0, 5) : ["CEO", "VP Sales", "Head of Marketing"],
+          industry: "SaaS, Technology",
+          company_size: "51-200, 201-500",
+        };
+        cleaned = JSON.stringify(parsed);
+      }
+    } catch (_) {
+      // If parse fails, return cleaned as-is
+    }
 
     // Increment usage counter (estimate ~2000 tokens per generation request)
     incrementUsage(2000);

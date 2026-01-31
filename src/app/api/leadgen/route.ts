@@ -46,6 +46,7 @@ export async function POST(req: Request) {
     const job_id = body.job_id ?? generateJobId();
     const icp = normalizeIcp(body);
     const limits = body.limits ?? {};
+    const minio_payload = body.minio_payload;
     const input: LeadgenJobInput = {
       job_id,
       icp,
@@ -53,6 +54,7 @@ export async function POST(req: Request) {
         target_leads: limits.target_leads ?? 100,
         max_runtime_ms: limits.max_runtime_ms ?? 45000,
       },
+      ...(minio_payload?.product && minio_payload?.segments?.length && { minio_payload }),
     };
 
     createJob(job_id, input);

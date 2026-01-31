@@ -10,6 +10,7 @@ import { mapIcpToApolloFilters, getWideningSteps } from "./icp-to-apollo";
 import { normalizePerson, isLeadValid } from "./normalize";
 import { buildCsv, getCsvFilename } from "./csv-export";
 import { uploadCsv, getPresignedDownloadUrl, isStorageConfigured } from "./storage";
+import { uploadDemoImportToS3 } from "@/lib/demo-import-storage";
 
 const TARGET_LEADS_DEFAULT = 100;
 const MAX_RUNTIME_MS_DEFAULT = 45000;
@@ -110,7 +111,9 @@ export async function runLeadgenWorker(jobId: string): Promise<void> {
   }
 
   const finalLeads = leads.slice(0, targetLeads);
+  const linkedin_urls = finalLeads.map((l) => l.linkedin_url).filter(Boolean);
   let download_csv_url: string | null = null;
+  let minio_object_key: string | null = null;
 
   if (finalLeads.length > 0 && isStorageConfigured()) {
     try {
@@ -123,12 +126,34 @@ export async function runLeadgenWorker(jobId: string): Promise<void> {
     }
   }
 
+  const minioPayload = (input as LeadgenJobInput).minio_payload;
+  if (linkedin_urls.length > 0 && minioPayload?.product && minioPayload?.segments?.length) {
+    try {
+      const payload = {
+        product: minioPayload.product,
+        segments: minioPayload.segments.map((s) => ({
+          name: s.name,
+          personalization: s.personalization,
+          leads: linkedin_urls,
+          ...(s.outreach_personalization != null && { outreach_personalization: s.outreach_personalization }),
+          ...(s.dialog_personalization != null && { dialog_personalization: s.dialog_personalization }),
+        })),
+      };
+      const { objectKey } = await uploadDemoImportToS3(payload);
+      minio_object_key = objectKey;
+    } catch (e) {
+      console.error("Leadgen MinIO upload error:", e);
+    }
+  }
+
   updateJob(jobId, {
     status: "done",
     icp_used: icp,
     leads_count: finalLeads.length,
+    linkedin_urls,
     leads_preview: finalLeads.slice(0, PREVIEW_SIZE),
     download_csv_url,
+    minio_object_key: minio_object_key ?? undefined,
     debug: {
       apollo_requests: apolloRequests,
       widening_steps_applied: wideningStepsApplied,

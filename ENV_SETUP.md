@@ -37,6 +37,15 @@
 
 UI MinIO: порт 9001. Для приложения нужен API: порт 9000.
 
+### Где что лежит в бакете
+
+| Путь в бакете | Что там | Кто пишет |
+|---------------|---------|-----------|
+| **`demo-imports/`** | JSON-файлы (`uuid.json`) — продукт, сегменты, LinkedIn URL лидов | POST /api/demo-import и leadgen worker (когда есть лиды + minio_payload) |
+| **`leadgen-csv/`** | CSV-файлы выгрузки лидов Apollo | Leadgen worker (всегда при успешном сборе лидов) |
+
+Если запускали **leadgen** и ждёте CSV — смотрите папку **leadgen-csv/** в том же бакете, не только demo-imports.
+
 ---
 
 ## Apollo (сбор лидов)

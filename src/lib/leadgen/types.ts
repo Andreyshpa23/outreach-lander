@@ -31,10 +31,18 @@ export interface LeadgenLimits {
   max_runtime_ms?: number;
 }
 
+/** Product + segments (without leads) for MinIO payload; leads = LinkedIn URLs from Apollo */
+export interface LeadgenMinioPayload {
+  product: { name: string; description: string; goal_type: string; goal_description: string };
+  segments: Array<{ name: string; personalization: string; outreach_personalization?: string; dialog_personalization?: string }>;
+}
+
 export interface LeadgenJobInput {
   job_id?: string;
   icp: Icp;
   limits?: LeadgenLimits;
+  /** Optional: for saving to MinIO with leads = LinkedIn URLs only */
+  minio_payload?: LeadgenMinioPayload;
 }
 
 export interface Lead {
@@ -56,8 +64,12 @@ export interface LeadgenJobResult {
   status: "queued" | "running" | "done" | "failed";
   icp_used?: Icp;
   leads_count: number;
+  /** Only LinkedIn URLs from Apollo (for MinIO format) */
+  linkedin_urls: string[];
   leads_preview: Lead[];
   download_csv_url: string | null;
+  /** Set after saving to MinIO (object key for cookie demo_st_minio_id) */
+  minio_object_key?: string | null;
   debug: {
     apollo_requests?: number;
     widening_steps_applied?: string[];

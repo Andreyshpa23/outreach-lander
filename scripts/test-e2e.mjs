@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * E2E тест: сохранение в MinIO (demo-import + cookie) и сбор лидов через Apollo (leadgen).
+ * E2E тест: проверка MinIO подключения (без записи) и сбор лидов через Apollo (leadgen).
  * Запуск: node scripts/test-e2e.mjs
  * Сервер должен быть запущен (npm run dev). По умолчанию BASE_URL=http://localhost:3002
  */
@@ -11,64 +11,23 @@ async function main() {
   console.log("=== E2E тест (клиент) ===\n");
   console.log("BASE_URL:", BASE);
 
-  // --- 1. Demo-import: сохранение в MinIO + cookie demo_st_minio_id ---
-  console.log("\n--- 1. POST /api/demo-import (MinIO + cookie) ---");
-  const demoPayload = {
-    product: {
-      name: "E2E Test Product",
-      description: "Test save to MinIO and cookie",
-      goal_type: "MANUAL_GOAL",
-      goal_description: "Test",
-    },
-    segments: [
-      {
-        name: "Test Segment",
-        personalization: "Test personalization",
-        leads: [
-          "https://linkedin.com/in/jane-smith-1",
-          "https://linkedin.com/in/jane-smith-2",
-        ],
-      },
-    ],
-  };
-  try {
-    const demoRes = await fetch(`${BASE}/api/demo-import`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(demoPayload),
-    });
-    const demoJson = await demoRes.json();
-    const setCookie = demoRes.headers.get("set-cookie") || "";
-    const hasDemoCookie = setCookie.includes("demo_st_minio_id");
-    console.log("Status:", demoRes.status);
-    console.log("Response:", JSON.stringify(demoJson, null, 2));
-    console.log("Cookie demo_st_minio_id задана:", hasDemoCookie);
-    if (!demoRes.ok || !demoJson.success) {
-      console.log("❌ Demo-import: ошибка");
-      return;
-    }
-    console.log("✅ Demo-import: сохранено в MinIO, cookie demo_st_minio_id установлена");
-  } catch (e) {
-    console.error("❌ Demo-import request failed:", e.message);
-  }
-
-  // --- 2. Test MinIO (проверка записи) ---
-  console.log("\n--- 2. GET /api/test-minio ---");
+  // --- 1. Проверка MinIO (без записи — в MinIO пишут только demo-import и leadgen) ---
+  console.log("\n--- 1. GET /api/test-minio (проверка подключения) ---");
   try {
     const minioRes = await fetch(`${BASE}/api/test-minio`);
     const minioJson = await minioRes.json();
     console.log("Response:", JSON.stringify(minioJson, null, 2));
     if (minioJson.success) {
-      console.log("✅ MinIO: запись работает, objectKey:", minioJson.objectKey);
+      console.log("✅ MinIO: подключение ок");
     } else {
-      console.log("❌ MinIO: ошибка", minioJson.error);
+      console.log("❌ MinIO:", minioJson.error);
     }
   } catch (e) {
     console.error("❌ Test-minio request failed:", e.message);
   }
 
-  // --- 3. Leadgen: Apollo лиды ---
-  console.log("\n--- 3. POST /api/leadgen (Apollo) ---");
+  // --- 2. Leadgen: Apollo лиды (реальные URL → MinIO при передаче minio_payload) ---
+  console.log("\n--- 2. POST /api/leadgen (Apollo) ---");
   const leadgenPayload = {
     icp: {
       geo: { countries: ["United States"] },
@@ -112,8 +71,8 @@ async function main() {
     console.error("Run request error:", e.message);
   }
 
-  // --- 4. Poll GET /api/leadgen/{job_id} ---
-  console.log("\n--- 4. Poll GET /api/leadgen/" + jobId + " (до 45 сек) ---");
+  // --- 3. Poll GET /api/leadgen/{job_id} ---
+  console.log("\n--- 3. Poll GET /api/leadgen/" + jobId + " (до 45 сек) ---");
   const pollStart = Date.now();
   const pollMax = 45000;
   let result;
