@@ -72,6 +72,7 @@ export default function Page() {
     download_csv_url?: string | null;
     error?: string | null;
   } | null>(null);
+  const [launchSaving, setLaunchSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatMessagesEndRef = useRef<HTMLDivElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
@@ -378,6 +379,47 @@ export default function Page() {
     } catch (e: unknown) {
       setLeadgenStatus("error");
       setLeadgenResult({ error: e instanceof Error ? e.message : "Unknown error" });
+    }
+  }
+
+  // Save to MinIO when user clicks "Launch outreach" — one fast request (~200–600 ms)
+  async function handleLaunchOutreach() {
+    if (!apiData?.segments?.length) {
+      setShowAuthModal(true);
+      return;
+    }
+    setLaunchSaving(true);
+    try {
+      const productNameVal = productName || initialInput || apiData?.product_name || "Product";
+      const descriptionParts = [...(productUTPs || []), ...(productMetrics || [])].slice(0, 4);
+      const description = descriptionParts.join(". ").substring(0, 500) || "Product details";
+      const payload = {
+        product: {
+          name: productNameVal,
+          description,
+          goal_type: "MANUAL_GOAL",
+          goal_description: "Надо забукать с ним кол, попроси его прислать удобные слоты для созвона или его календли",
+        },
+        segments: apiData.segments.map((seg: { name?: string; personalization_ideas?: string; personalization?: string }) => ({
+          name: seg.name || "Segment",
+          personalization: seg.personalization_ideas || seg.personalization || "",
+          leads: [] as string[],
+        })),
+      };
+      const res = await fetch("/api/demo-import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.key) {
+        setCookie("demo_st_minio_id", data.key, 30);
+      }
+      setShowAuthModal(true);
+    } catch (_) {
+      setShowAuthModal(true);
+    } finally {
+      setLaunchSaving(false);
     }
   }
 
@@ -2240,13 +2282,21 @@ export default function Page() {
                             })}
                     </div>
 
-                          {/* CTA */}
+                          {/* CTA — save to MinIO on click (~200–600 ms), then open auth modal */}
                           <Button 
-                            className="w-full rounded-full !bg-zinc-900 !text-white hover:!bg-zinc-800"
+                            className="w-full rounded-full !bg-zinc-900 !text-white hover:!bg-zinc-800 disabled:opacity-70"
                             style={{ backgroundColor: '#18181b', color: '#ffffff' }}
-                            onClick={() => setShowAuthModal(true)}
+                            onClick={handleLaunchOutreach}
+                            disabled={launchSaving}
                           >
-                            🚀 Launch outreach for this segment
+                            {launchSaving ? (
+                              <>
+                                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
+                                Preparing…
+                              </>
+                            ) : (
+                              <>🚀 Launch outreach for this segment</>
+                            )}
                           </Button>
                   </CardContent>
                 </Card>
