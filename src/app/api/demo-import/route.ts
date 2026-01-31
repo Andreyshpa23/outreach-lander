@@ -21,7 +21,20 @@ export async function POST(req: Request) {
 
     const payload = json as DemoImportPayload;
 
-    const { objectKey } = await uploadDemoImportToS3(payload);
+    let objectKey: string;
+    try {
+      const result = await uploadDemoImportToS3(payload);
+      objectKey = result.objectKey;
+    } catch (uploadErr: unknown) {
+      const msg = uploadErr instanceof Error ? uploadErr.message : String(uploadErr);
+      if (msg.includes("not configured") || msg.includes("S3 client")) {
+        return NextResponse.json(
+          { success: false, error: "MinIO is not configured on server. Set MINIO_ENDPOINT, MINIO_BUCKET, MINIO_ACCESS_KEY, MINIO_SECRET_KEY in Vercel env." },
+          { status: 503 }
+        );
+      }
+      throw uploadErr;
+    }
 
     // objectKey is {uuid}.json, cookie stores only this id
     const cookieValue = objectKey;

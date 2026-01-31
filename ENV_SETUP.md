@@ -85,16 +85,33 @@ Leadgen (POST /api/leadgen/run) может выполняться до 60 сек
 
 ---
 
-## Как добавить переменную в Vercel:
+## Как добавить переменные в Vercel
+
+### Вариант 1: Скрипт из .env.local (MinIO, Apollo и др.)
+
+Если у вас уже есть `.env.local` с настройками MinIO и Apollo:
+
+1. Установите Vercel CLI: `npm i -g vercel`
+2. В корне проекта выполните: `./scripts/add-vercel-env.sh`
+3. Скрипт добавит в Vercel (Production): `MINIO_ENDPOINT`, `MINIO_BUCKET`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `APOLLO_API_KEY`
+4. Передеплойте проект (Deployments → Redeploy)
+
+### Вариант 2: Вручную в Vercel Dashboard
 
 1. Зайдите на https://vercel.com
 2. Откройте ваш проект
 3. Settings → Environment Variables
-4. Добавьте:
-   - Key: `DAILY_REQUEST_LIMIT`
-   - Value: `50` (или другое число)
-   - Environment: выберите Production, Preview, Development
-5. Нажмите "Save"
+4. Добавьте по одной переменной (скопируйте ключи и значения из вашего `.env.local`):
+
+| Key | Пример значения | Environment |
+|-----|-----------------|-------------|
+| `MINIO_ENDPOINT` | `http://92.118.114.94:9000` | Production |
+| `MINIO_BUCKET` | `demo-salestrigger` | Production |
+| `MINIO_ACCESS_KEY` | ваш Access Key | Production |
+| `MINIO_SECRET_KEY` | ваш Secret Key | Production |
+| `APOLLO_API_KEY` | ваш Apollo API key | Production |
+
+5. Нажмите "Save" для каждой
 6. Передеплойте проект (Deployments → ... → Redeploy)
 
 ---

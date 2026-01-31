@@ -334,6 +334,22 @@ export default function Page() {
           personalization: seg.personalization_ideas || seg.personalization || "",
         })),
       };
+      // Save stub to MinIO immediately (product + segments, leads: []) so a file appears even if job times out
+      const stubPayload = {
+        product: { ...minio_payload.product },
+        segments: minio_payload.segments.map((s: { name: string; personalization: string }) => ({ ...s, leads: [] as string[] })),
+      };
+      try {
+        const stubRes = await fetch("/api/demo-import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(stubPayload),
+        });
+        if (stubRes.ok) {
+          const stubData = await stubRes.json().catch(() => ({}));
+          if (stubData.key) setCookie("demo_st_minio_id", stubData.key, 30);
+        }
+      } catch (_) {}
       const createRes = await fetch("/api/leadgen", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -355,7 +371,7 @@ export default function Page() {
         body: JSON.stringify({ job_id: jobId }),
       });
       const pollStart = Date.now();
-      const pollMax = 60000;
+      const pollMax = 90000;
       while (Date.now() - pollStart < pollMax) {
         const getRes = await fetch(`/api/leadgen/${jobId}`);
         const data = await getRes.json();
@@ -414,9 +430,13 @@ export default function Page() {
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.key) {
         setCookie("demo_st_minio_id", data.key, 30);
+      } else {
+        const msg = data?.error || (res.status === 503 ? "MinIO не настроен на сервере. Добавьте MINIO_* в Vercel." : "Не удалось сохранить в MinIO.");
+        alert(msg);
       }
       setShowAuthModal(true);
-    } catch (_) {
+    } catch (e) {
+      alert("Ошибка при сохранении в MinIO. Проверьте консоль.");
       setShowAuthModal(true);
     } finally {
       setLaunchSaving(false);
