@@ -182,7 +182,7 @@ export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJob
 
   if (input.segment_icps && input.segment_icps.length > 0) {
     console.log("[leadgen] job_id=" + jobId + " per-segment ICP, segments=" + input.segment_icps.length);
-    const timePerSegment = Math.max(15000, Math.floor(maxRuntimeMs / input.segment_icps.length));
+    const timePerSegment = Math.max(2000, Math.floor(maxRuntimeMs / input.segment_icps.length));
     for (const { segment_index, icp } of input.segment_icps) {
       if (Date.now() >= deadline) {
         console.log("[leadgen] global deadline reached before segment", segment_index);
