@@ -176,7 +176,7 @@ export async function POST(req: Request) {
     };
     createJob(job_id, input);
 
-    // Запускаем воркер здесь и ждём — так лиды гарантированно попадают в файл (не зависим от второго запроса с клиента).
+    // Ждём завершения воркера — ответ клиенту только после перезаписи файла в MinIO.
     await runLeadgenWorker(job_id, input);
 
     const res = NextResponse.json({

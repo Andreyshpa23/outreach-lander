@@ -284,13 +284,15 @@ export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJob
           ...(s.dialog_personalization != null && { dialog_personalization: s.dialog_personalization }),
         })),
       };
+      const totalLeads = segmentLinkedInUrls.flat().length;
+      console.log("[leadgen] MinIO overwrite START key=" + minioKeyToUpdate + " totalLeads=" + totalLeads);
       const { objectKey } = await uploadDemoImportToS3(payload, minioKeyToUpdate);
       minio_object_key = objectKey;
-      console.log("[leadgen] MinIO updated objectKey=" + objectKey + " (leads only, no leads_detail)");
+      console.log("[leadgen] MinIO overwrite DONE objectKey=" + objectKey);
     } catch (e) {
       const errMsg = e instanceof Error ? e.message : String(e);
       minioError = errMsg;
-      console.error("Leadgen MinIO upload error:", errMsg, e);
+      console.error("[leadgen] MinIO overwrite FAIL key=" + minioKeyToUpdate + " error:", errMsg, e);
     }
   }
 
