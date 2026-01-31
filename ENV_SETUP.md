@@ -99,6 +99,7 @@ UI MinIO: порт 9001. Для приложения нужен **API: порт 
 Для leadgen (POST /api/leadgen) нужен master API key из [Apollo API](https://docs.apollo.io/reference/people-api-search):
 
 - **`APOLLO_API_KEY`** — Master API Key из Apollo (Settings → API Keys)
+- **`APOLLO_ENRICH_FOR_LINKEDIN_LIMIT`** — (опционально) сколько лидов без LinkedIn обогащать через People Enrichment, чтобы получить linkedin_url. По умолчанию **0** (выключено). Если задать, например, **10** — для первых 10 контактов без linkedin_url будет вызван Apollo People Enrichment (тратит кредиты Apollo). Полезно, когда Search не возвращает linkedin_url.
 
 ---
 

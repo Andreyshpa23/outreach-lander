@@ -109,9 +109,18 @@ export async function searchPeople(
       }
 
       const data = (await res.json()) as ApolloSearchResponse & { people?: ApolloPerson[]; data?: { people?: ApolloPerson[] }; contacts?: ApolloPerson[] };
-      // Apollo may return people at top level, under data, or as contacts; иногда каждый элемент — { person: {...} }
+      // Apollo may return people at top level, under data, or as contacts; иногда каждый элемент — { person: {...} } и linkedin_url на верхнем уровне
       const raw = data.people ?? (data as { data?: { people?: ApolloPerson[] } }).data?.people ?? (data as { contacts?: ApolloPerson[] }).contacts ?? [];
-      const people = (raw as (ApolloPerson & { person?: ApolloPerson })[]).map((p) => (p && typeof p === "object" && p.person ? p.person : p)) as ApolloPerson[];
+      const people = (raw as (ApolloPerson & { person?: ApolloPerson; linkedin_url?: string })[]).map((p) => {
+        const inner = p && typeof p === "object" && p.person ? p.person : p;
+        const topLevelUrl = (p && typeof p === "object" && (p as Record<string, unknown>).linkedin_url) as string | undefined;
+        if (inner && typeof inner === "object" && topLevelUrl && typeof topLevelUrl === "string" && topLevelUrl.trim()) {
+          const cur = (inner as Record<string, unknown>).linkedin_url;
+          if (!cur || (typeof cur === "string" && !cur.trim()))
+            return { ...inner, linkedin_url: topLevelUrl.trim() } as ApolloPerson;
+        }
+        return inner as ApolloPerson;
+      });
       const pagination = data.pagination ?? (data as { data?: { pagination?: ApolloSearchResponse["pagination"] } }).data?.pagination;
       console.log("[apollo] page=" + page + " status=" + res.status + " people=" + people.length + " elapsed_ms=" + elapsed + " total_pages=" + (pagination?.total_pages ?? "?"));
       return { people, pagination } as ApolloSearchResponse;
@@ -126,4 +135,37 @@ export async function searchPeople(
   }
 
   throw lastError ?? new Error("Apollo search failed after retries");
+}
+
+/**
+ * People Enrichment — один человек по first_name, last_name, domain.
+ * Тратит кредиты Apollo. Возвращает linkedin_url если есть.
+ */
+export async function enrichPerson(params: {
+  first_name: string;
+  last_name: string;
+  domain?: string;
+}): Promise<{ linkedin_url?: string } | null> {
+  const apiKey = process.env.APOLLO_API_KEY;
+  if (!apiKey) return null;
+  const body: Record<string, string> = {
+    api_key: apiKey,
+    first_name: (params.first_name ?? "").trim(),
+    last_name: (params.last_name ?? "").trim(),
+  };
+  if (params.domain?.trim()) body.domain = params.domain.trim();
+  try {
+    const res = await fetch(`${APOLLO_BASE}/people/match`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-cache", "X-Api-Key": apiKey },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { person?: { linkedin_url?: string } };
+    const url = data.person?.linkedin_url?.trim();
+    if (url && url.includes("linkedin.com")) return { linkedin_url: url };
+    return null;
+  } catch {
+    return null;
+  }
 }

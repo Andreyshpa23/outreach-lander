@@ -4,7 +4,7 @@
 
 import type { LeadgenJobInput, Lead, Icp, WideningStep } from "./types";
 import { getJob, updateJob } from "./job-store";
-import { searchPeople } from "./apollo-client";
+import { searchPeople, enrichPerson } from "./apollo-client";
 import type { ApolloPerson } from "./apollo-client";
 import { mapIcpToApolloFilters, getWideningSteps } from "./icp-to-apollo";
 import { normalizePerson, isLeadValid } from "./normalize";
@@ -121,8 +121,32 @@ export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJob
   }
 
   const finalLeads = leads.slice(0, targetLeads);
+  const enrichLimit = Math.min(
+    Math.max(0, parseInt(process.env.APOLLO_ENRICH_FOR_LINKEDIN_LIMIT ?? "0", 10) || 0),
+    25
+  );
+  if (enrichLimit > 0) {
+    const withoutLinkedIn = finalLeads.filter((l) => !l.linkedin_url?.trim());
+    let enriched = 0;
+    for (const lead of withoutLinkedIn) {
+      if (enriched >= enrichLimit) break;
+      const parts = (lead.full_name ?? "").trim().split(/\s+/);
+      const first_name = parts[0] ?? "";
+      const last_name = parts.slice(1).join(" ") ?? "";
+      let domain = "";
+      try {
+        if (lead.company_website?.trim()) domain = new URL(lead.company_website.replace(/^\/+/, "https://")).hostname.replace(/^www\./, "");
+      } catch {}
+      const result = await enrichPerson({ first_name, last_name, domain: domain || undefined });
+      if (result?.linkedin_url) {
+        lead.linkedin_url = result.linkedin_url;
+        enriched++;
+      }
+    }
+    if (enriched > 0) console.log("[leadgen] enriched", enriched, "leads with LinkedIn via People Enrichment");
+  }
   const linkedin_urls = finalLeads.map((l) => l.linkedin_url).filter(Boolean);
-  console.log("[leadgen] done leads_count=" + finalLeads.length + " apollo_requests=" + apolloRequests + " partial_due_to_timeout=" + partialDueToTimeout);
+  console.log("[leadgen] done leads_count=" + finalLeads.length + " linkedin_urls=" + linkedin_urls.length + " apollo_requests=" + apolloRequests + " partial_due_to_timeout=" + partialDueToTimeout);
 
   let download_csv_url: string | null = null;
   let minio_object_key: string | null = null;
