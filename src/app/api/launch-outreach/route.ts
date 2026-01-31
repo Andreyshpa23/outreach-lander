@@ -130,15 +130,25 @@ export async function POST(req: Request) {
 
     const baseIcp = target_audience ? targetAudienceToIcp(target_audience) : {};
     const segment_icps: SegmentIcp[] = [];
-    const hasFilters = segmentsRaw.some(
-      (s: { linkedin_filters?: string }) => s.linkedin_filters && String(s.linkedin_filters).trim()
-    );
-    if (hasFilters && segmentsRaw.length >= 2) {
-      segmentsRaw.forEach((s: { linkedin_filters?: string }, i: number) => {
-        const addition = linkedinFiltersToIcpAddition(s.linkedin_filters);
-        segment_icps.push({ segment_index: i, icp: mergeIcp(baseIcp, addition) });
-      });
-    }
+    // Always create per-segment ICPs so each segment gets its own search
+    segmentsRaw.forEach((s: { linkedin_filters?: string; name?: string }, i: number) => {
+      const addition = linkedinFiltersToIcpAddition(s.linkedin_filters);
+      // If no filters and no base ICP, use segment name as fallback keyword
+      let segmentIcp = mergeIcp(baseIcp, addition);
+      if (Object.keys(segmentIcp).every(k => {
+        const v = (segmentIcp as Record<string, unknown>)[k];
+        if (Array.isArray(v)) return v.length === 0;
+        if (typeof v === "object" && v) return Object.keys(v).length === 0;
+        return !v;
+      })) {
+        // Completely empty ICP — use segment name or product name as fallback
+        const fallbackKeyword = s.name || payload.product.name || "Technology";
+        segmentIcp = { industry_keywords: [fallbackKeyword] };
+      }
+      segment_icps.push({ segment_index: i, icp: segmentIcp });
+      console.log("[launch-outreach] segment", i, s.name, "icp_keys:", Object.keys(segmentIcp), "filters:", s.linkedin_filters?.slice(0, 50) || "(none)");
+    });
+    console.log("[launch-outreach] segment_icps count:", segment_icps.length, "baseIcp_keys:", Object.keys(baseIcp));
     const job_id = generateJobId();
     const minio_payload = {
       product: payload.product,

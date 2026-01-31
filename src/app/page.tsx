@@ -299,9 +299,10 @@ export default function Page() {
           goal_type: "MANUAL_GOAL",
           goal_description: "Надо забукать с ним кол, попроси его прислать удобные слоты для созвона или его календли",
         },
-        segments: apiData.segments.map((seg: { name?: string; personalization_ideas?: string; personalization?: string }) => ({
+        segments: apiData.segments.map((seg: { name?: string; personalization_ideas?: string; personalization?: string; linkedin_filters?: string }, i: number) => ({
           name: seg.name || "Segment",
           personalization: seg.personalization_ideas || seg.personalization || "",
+          linkedin_filters: typed[i]?.filters || seg.linkedin_filters || "",
         })),
         target_audience: {
           geo: targetAudience.geo || undefined,
@@ -2063,23 +2064,39 @@ export default function Page() {
                             <Badge variant="secondary" className="bg-zinc-100 text-zinc-700">Segment</Badge>
       </div>
 
-                          {/* Compact Filters & Personalization */}
-                          {(currentTyped.filters || currentTyped.personalization) && (
-                            <div className="mb-4 space-y-2 text-xs">
-                              {currentTyped.filters && (
-                                <div className="rounded-lg border border-zinc-200 bg-zinc-50/50 p-2">
-                                  <span className="font-medium text-zinc-700">Filters: </span>
-                                  <span className="text-zinc-600">{currentTyped.filters.substring(0, 100)}{currentTyped.filters.length > 100 ? '...' : ''}</span>
-                                </div>
-                              )}
-                              {currentTyped.personalization && (
-                                <div className="rounded-lg border border-zinc-200 bg-zinc-50/50 p-2">
-                                  <span className="font-medium text-zinc-700">Personalization: </span>
-                                  <span className="text-zinc-600">{currentTyped.personalization.substring(0, 100)}{currentTyped.personalization.length > 100 ? '...' : ''}</span>
-                                </div>
-                              )}
+                          {/* Editable Filters for this segment */}
+                          <div className="mb-4 space-y-3">
+                            <div>
+                              <label className="block text-xs font-medium text-zinc-700 mb-1">
+                                🎯 Search filters for "{currentSegment.name}"
+                              </label>
+                              <input
+                                type="text"
+                                value={currentTyped.filters || ""}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setTyped((prev) => {
+                                    const next = [...prev];
+                                    if (next[selectedSegmentIndex]) {
+                                      next[selectedSegmentIndex] = { ...next[selectedSegmentIndex], filters: val };
+                                    }
+                                    return next;
+                                  });
+                                }}
+                                placeholder="e.g. CEO, CTO, Head of Sales, VP Engineering"
+                                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                              />
+                              <p className="mt-1 text-xs text-zinc-500">
+                                Job titles and keywords to find leads in this segment (comma-separated)
+                              </p>
                             </div>
-                          )}
+                            {currentTyped.personalization && (
+                              <div className="rounded-lg border border-zinc-200 bg-zinc-50/50 p-2 text-xs">
+                                <span className="font-medium text-zinc-700">Personalization: </span>
+                                <span className="text-zinc-600">{currentTyped.personalization.substring(0, 120)}{currentTyped.personalization.length > 120 ? '...' : ''}</span>
+                              </div>
+                            )}
+                          </div>
 
                           {/* Chat Messages - Only one active at a time */}
                           <div className="flex-1 overflow-y-auto space-y-4 mb-6">
