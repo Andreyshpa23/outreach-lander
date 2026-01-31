@@ -177,11 +177,18 @@ export async function runLeadgenWorker(jobId: string, inputOverride?: LeadgenJob
 
   if (input.segment_icps && input.segment_icps.length > 0) {
     console.log("[leadgen] job_id=" + jobId + " per-segment ICP, segments=" + input.segment_icps.length);
+    // Distribute time across segments (give at least 15s per segment)
+    const timePerSegment = Math.max(15000, Math.floor(maxRuntimeMs / input.segment_icps.length));
     for (const { segment_index, icp } of input.segment_icps) {
-      if (Date.now() >= deadline) break;
+      if (Date.now() >= deadline) {
+        console.log("[leadgen] global deadline reached before segment", segment_index);
+        partialDueToTimeout = true;
+        break;
+      }
       const segmentLabel = minioPayload?.segments?.[segment_index]?.name ?? "seg" + segment_index;
+      const segmentDeadline = Math.min(Date.now() + timePerSegment, deadline);
       try {
-        const result = await runSearchForIcp(icp, targetLeads, deadline, productName, segmentLabel);
+        const result = await runSearchForIcp(icp, targetLeads, segmentDeadline, productName, segmentLabel);
         segmentLinkedInUrls[segment_index] = result.linkedin_urls;
         allLeads = allLeads.concat(result.leads);
         totalApolloRequests += result.apolloRequests;
