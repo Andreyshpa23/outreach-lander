@@ -36,36 +36,47 @@ interface UserSession {
   };
 }
 
-// Detect Vercel/serverless environment
-const IS_VERCEL = !!process.env.VERCEL || !!process.env.VERCEL_ENV || process.cwd() === '/var/task';
-const USE_FILE_SYSTEM = !IS_VERCEL;
-
-// In Vercel, use /tmp (only writable directory). Otherwise use .sessions in project root.
-const SESSIONS_DIR = IS_VERCEL 
-  ? path.join('/tmp', '.sessions')
-  : path.join(process.cwd(), '.sessions');
-
 // In-memory fallback for serverless environments where file system might not work
 const MEMORY_SESSIONS = new Map<string, UserSession>();
 
+// Detect Vercel/serverless environment at runtime (not at module load)
+function isVercelEnvironment(): boolean {
+  // Check multiple indicators
+  if (process.env.VERCEL || process.env.VERCEL_ENV) return true;
+  const cwd = process.cwd();
+  if (cwd === '/var/task') return true;
+  if (cwd.startsWith('/var/task/')) return true;
+  // Additional check: if we're in a serverless-like environment
+  if (cwd.includes('/.next') && !fs.existsSync) return true;
+  return false;
+}
+
+function getSessionsDir(): string {
+  if (isVercelEnvironment()) {
+    return path.join('/tmp', '.sessions');
+  }
+  return path.join(process.cwd(), '.sessions');
+}
+
 // Ensure sessions directory exists (only if not in Vercel or if /tmp is available)
 function ensureSessionsDir() {
-  // Double-check: never create directories in /var/task (Vercel)
-  const currentDir = process.cwd();
-  if (currentDir === '/var/task' || !USE_FILE_SYSTEM) {
-    // In Vercel, skip file system operations entirely
+  // Always check at runtime, never trust module-level constants
+  if (isVercelEnvironment()) {
+    // In Vercel, skip file system operations entirely - use in-memory only
     return;
   }
   
-  // Additional safety: check if path contains /var/task
-  if (SESSIONS_DIR.includes('/var/task')) {
-    console.warn('[session-storage] Skipping directory creation in /var/task (Vercel)');
+  const sessionsDir = getSessionsDir();
+  
+  // Final safety check: never create directories in /var/task
+  if (sessionsDir.includes('/var/task')) {
+    console.warn('[session-storage] Blocked: attempted to create dir in /var/task:', sessionsDir);
     return;
   }
   
   try {
-    if (fs.existsSync && !fs.existsSync(SESSIONS_DIR)) {
-      fs.mkdirSync(SESSIONS_DIR, { recursive: true });
+    if (fs.existsSync && !fs.existsSync(sessionsDir)) {
+      fs.mkdirSync(sessionsDir, { recursive: true });
     }
   } catch (error) {
     // If directory creation fails, use in-memory only
@@ -74,10 +85,13 @@ function ensureSessionsDir() {
 }
 
 function getSessionFile(sessionId: string): string {
-  return path.join(SESSIONS_DIR, `${sessionId}.json`);
+  return path.join(getSessionsDir(), `${sessionId}.json`);
 }
 
 export function getOrCreateSession(sessionId: string, ip?: string, userAgent?: string): UserSession {
+  // Always check at runtime
+  const isVercel = isVercelEnvironment();
+  
   // Try in-memory first
   const memSession = MEMORY_SESSIONS.get(sessionId);
   if (memSession) {
@@ -86,11 +100,12 @@ export function getOrCreateSession(sessionId: string, ip?: string, userAgent?: s
   }
   
   // Try file system only if not in Vercel
-  if (USE_FILE_SYSTEM) {
+  if (!isVercel) {
     ensureSessionsDir();
     const sessionFile = getSessionFile(sessionId);
     
-    if (fs.existsSync && fs.existsSync(sessionFile)) {
+    // Final safety check before accessing file
+    if (!sessionFile.includes('/var/task') && fs.existsSync && fs.existsSync(sessionFile)) {
       try {
         const data = fs.readFileSync(sessionFile, 'utf-8');
         const session = JSON.parse(data);
@@ -122,12 +137,17 @@ export function saveSession(session: UserSession): void {
   // Always update in-memory
   MEMORY_SESSIONS.set(session.sessionId, session);
   
+  // Always check at runtime
+  const isVercel = isVercelEnvironment();
+  
   // Try to save to file system only if not in Vercel
-  if (USE_FILE_SYSTEM) {
+  if (!isVercel) {
     try {
       ensureSessionsDir();
       const sessionFile = getSessionFile(session.sessionId);
-      if (fs.writeFileSync) {
+      
+      // Final safety check before writing file
+      if (!sessionFile.includes('/var/task') && fs.writeFileSync) {
         fs.writeFileSync(sessionFile, JSON.stringify(session, null, 2));
       }
     } catch (error) {
@@ -152,15 +172,19 @@ export function saveLastResult(sessionId: string, result: UserSession['lastResul
 }
 
 export function getSession(sessionId: string): UserSession | null {
+  // Always check at runtime
+  const isVercel = isVercelEnvironment();
+  
   // Try in-memory first
   const memSession = MEMORY_SESSIONS.get(sessionId);
   if (memSession) return memSession;
   
   // Try file system only if not in Vercel
-  if (USE_FILE_SYSTEM) {
+  if (!isVercel) {
     const sessionFile = getSessionFile(sessionId);
     
-    if (fs.existsSync && fs.existsSync(sessionFile)) {
+    // Final safety check before accessing file
+    if (!sessionFile.includes('/var/task') && fs.existsSync && fs.existsSync(sessionFile)) {
       try {
         const data = fs.readFileSync(sessionFile, 'utf-8');
         const session = JSON.parse(data);
