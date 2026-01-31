@@ -21,6 +21,16 @@
 
 Без **MINIO_*** при нажатии «Launch outreach» будет ошибка «MinIO не настроен» — добавь все четыре переменные MinIO в Vercel.
 
+### Добавить переменные в Vercel автоматически (из .env.local)
+
+1. Создай токен: [vercel.com/account/tokens](https://vercel.com/account/tokens) → Create.
+2. В `.env.local` добавь:
+   - `VERCEL_TOKEN=...` (вставь токен)
+   - `VERCEL_PROJECT_NAME=outreach-lander` (или id проекта, если другой)
+3. В `.env.local` должны быть все нужные переменные (MINIO_*, APOLLO_*, AZURE_*, и т.д.).
+4. Запусти: `node scripts/push-vercel-env.mjs`  
+   Скрипт отправит все переменные из списка в Vercel (Production). После этого сделай Redeploy.
+
 ---
 
 ## Для ограничения использования токенов
