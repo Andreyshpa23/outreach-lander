@@ -1,17 +1,19 @@
 /**
  * POST /api/launch-outreach
- * Сразу создаём файл в MinIO (product + segments с leads: []), кладём key в cookie.
- * В фоне запускаем Apollo leadgen; по завершении дополняем тот же файл ссылками на LinkedIn.
+ * Сначала собираем лиды (воркер Apollo), потом один раз создаём файл в MinIO с лидами и возвращаем ответ.
+ * Клиент ждёт ответа (Preparing…) — файл создаётся только после сбора лидов.
  */
 
 import { NextResponse } from "next/server";
 import {
   DemoImportPayload,
-  uploadDemoImportToS3,
+  generateDemoImportKey,
   validateDemoImportPayload,
 } from "@/lib/demo-import-storage";
+import { getMinioClient } from "@/lib/minio-config";
 import { createJob, generateJobId } from "@/lib/leadgen/job-store";
 import type { LeadgenJobInput, Icp, IcpGeo, IcpPositions, IcpCompanySize, SegmentIcp } from "@/lib/leadgen/types";
+import { runLeadgenWorker } from "@/lib/leadgen/leadgen-worker";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -110,23 +112,16 @@ export async function POST(req: Request) {
       );
     }
 
-    let objectKey: string;
-    try {
-      const result = await uploadDemoImportToS3(payload);
-      objectKey = result.objectKey;
-    } catch (uploadErr: unknown) {
-      const msg = uploadErr instanceof Error ? uploadErr.message : String(uploadErr);
-      if (msg.includes("not configured") || msg.includes("S3 client")) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "MinIO is not configured on server. Set MINIO_ENDPOINT, MINIO_BUCKET, MINIO_ACCESS_KEY, MINIO_SECRET_KEY in Vercel env.",
-          },
-          { status: 503 }
-        );
-      }
-      throw uploadErr;
+    if (!getMinioClient()) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "MinIO is not configured on server. Set MINIO_ENDPOINT, MINIO_BUCKET, MINIO_ACCESS_KEY, MINIO_SECRET_KEY in Vercel env.",
+        },
+        { status: 503 }
+      );
     }
+    const objectKey = generateDemoImportKey();
 
     const baseIcp = target_audience ? targetAudienceToIcp(target_audience) : {};
 
@@ -175,11 +170,12 @@ export async function POST(req: Request) {
     };
     createJob(job_id, input);
 
+    await runLeadgenWorker(job_id, input);
+
     const res = NextResponse.json({
       success: true,
       key: objectKey,
       job_id,
-      input,
     });
     res.cookies.set("demo_st_minio_id", objectKey, {
       path: "/",

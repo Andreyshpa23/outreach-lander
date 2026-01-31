@@ -319,26 +319,6 @@ export default function Page() {
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success && data.key) {
         setCookie("demo_st_minio_id", data.key, 30);
-        if (data.job_id && data.input) {
-          const runController = new AbortController();
-          const runTimeout = setTimeout(() => runController.abort(), 70000);
-          try {
-            const runRes = await fetch("/api/leadgen/run", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ job_id: data.job_id, input: data.input }),
-              signal: runController.signal,
-            });
-            clearTimeout(runTimeout);
-            if (!runRes.ok) {
-              const errText = await runRes.text().catch(() => "");
-              console.error("[leadgen/run] failed", runRes.status, errText);
-            }
-          } catch (e) {
-            clearTimeout(runTimeout);
-            console.error("[leadgen/run] error", e);
-          }
-        }
         setShowAuthModal(true);
       } else {
         const msg = data?.error || (res.status === 503 ? "MinIO не настроен на сервере. Добавьте MINIO_* в Vercel." : "Не удалось запустить outreach.");
