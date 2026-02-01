@@ -1,25 +1,47 @@
 <svg width="180" height="40" viewBox="0 0 180 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Variable width stroke simulation -->
+    <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F97316" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#F97316" stop-opacity="0.7"/>
+    </linearGradient>
+  </defs>
+  
   <!-- Icon circle -->
   <g transform="translate(0, 0)">
     <!-- Outer dark circle background -->
     <circle cx="20" cy="20" r="18" fill="#1A202C"/>
     
-    <!-- Orange dynamic symbol inside - two curved lines -->
-    <!-- First curved line: starts bottom-left, sweeps up-right, curves down, rounded tip upper-right -->
-    <path d="M 8 28 Q 12 18, 18 22 Q 24 26, 28 20 Q 30 16, 28 12" 
+    <!-- Single continuous orange line: starts bottom-left, curves up-right, angular down turn, curves up-right to end -->
+    <!-- Thicker at start, thinner at end -->
+    <path d="M 8 28 
+             Q 10 22, 12 20
+             Q 14 18, 16 16
+             Q 18 14, 20 12
+             Q 22 10, 24 12
+             Q 26 14, 28 16
+             Q 30 18, 30 14" 
           stroke="#F97316" 
-          stroke-width="2.5" 
+          stroke-width="3" 
           fill="none" 
           stroke-linecap="round" 
-          stroke-linejoin="round"/>
+          stroke-linejoin="round"
+          style="stroke-dasharray: 0; filter: drop-shadow(0 0 0.5px #F97316);"/>
     
-    <!-- Second curved line: starts higher-left, sharp up-right, loops down-left, arrow-like tip center-left -->
-    <path d="M 6 24 Q 10 8, 20 10 Q 26 12, 28 16 Q 26 20, 22 18 Q 18 16, 14 20" 
+    <!-- Thinner continuation to create variable width effect -->
+    <path d="M 8 28 
+             Q 10 22, 12 20
+             Q 14 18, 16 16
+             Q 18 14, 20 12
+             Q 22 10, 24 12
+             Q 26 14, 28 16
+             Q 30 18, 30 14" 
           stroke="#F97316" 
-          stroke-width="2.5" 
+          stroke-width="1.5" 
           fill="none" 
           stroke-linecap="round" 
-          stroke-linejoin="round"/>
+          stroke-linejoin="round"
+          opacity="0.8"/>
   </g>
   
   <!-- Text "SalesTrigger" -->

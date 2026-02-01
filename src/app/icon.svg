@@ -5,20 +5,32 @@
   <!-- Outer dark circle background -->
   <circle cx="16" cy="16" r="15" fill="#1A202C"/>
   
-  <!-- Orange dynamic symbol inside - two curved lines -->
-  <!-- First curved line: starts bottom-left, sweeps up-right, curves down, rounded tip upper-right -->
-  <path d="M 4 24 Q 6 14, 10 18 Q 14 22, 20 16 Q 22 12, 20 8" 
+  <!-- Single continuous orange line: starts bottom-left, curves up-right, angular down turn, curves up-right to end -->
+  <path d="M 4 24 
+           Q 5 18, 6 16
+           Q 7 14, 8 12
+           Q 9 10, 10 8
+           Q 11 6, 12 8
+           Q 13 10, 14 12
+           Q 15 14, 15 10" 
         stroke="#F97316" 
-        stroke-width="2" 
+        stroke-width="2.5" 
         fill="none" 
         stroke-linecap="round" 
         stroke-linejoin="round"/>
   
-  <!-- Second curved line: starts higher-left, sharp up-right, loops down-left, arrow-like tip center-left -->
-  <path d="M 3 20 Q 5 4, 16 6 Q 22 8, 24 12 Q 22 16, 18 14 Q 14 12, 10 16" 
+  <!-- Thinner continuation -->
+  <path d="M 4 24 
+           Q 5 18, 6 16
+           Q 7 14, 8 12
+           Q 9 10, 10 8
+           Q 11 6, 12 8
+           Q 13 10, 14 12
+           Q 15 14, 15 10" 
         stroke="#F97316" 
-        stroke-width="2" 
+        stroke-width="1.2" 
         fill="none" 
         stroke-linecap="round" 
-        stroke-linejoin="round"/>
+        stroke-linejoin="round"
+        opacity="0.8"/>
 </svg>
