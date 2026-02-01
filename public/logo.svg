@@ -2,19 +2,26 @@
   <!-- Icon circle -->
   <g transform="translate(0, 0)">
     <!-- Outer dark circle background -->
-    <circle cx="20" cy="20" r="18" fill="#1F2937"/>
+    <circle cx="20" cy="20" r="18" fill="#1A202C"/>
     
-    <!-- Three concentric arcs (open on right, aligned left) -->
-    <!-- Outermost dark arc -->
-    <path d="M 8 20 A 12 12 0 0 0 20 8" stroke="#1F2937" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <!-- Orange dynamic symbol inside - two curved lines -->
+    <!-- First curved line: starts bottom-left, sweeps up-right, curves down, rounded tip upper-right -->
+    <path d="M 8 28 Q 12 18, 18 22 Q 24 26, 28 20 Q 30 16, 28 12" 
+          stroke="#F97316" 
+          stroke-width="2.5" 
+          fill="none" 
+          stroke-linecap="round" 
+          stroke-linejoin="round"/>
     
-    <!-- Middle orange-red arc (prominent) -->
-    <path d="M 10 20 A 10 10 0 0 0 20 10" stroke="#F97316" stroke-width="3" fill="none" stroke-linecap="round"/>
-    
-    <!-- Innermost dark arc -->
-    <path d="M 12 20 A 8 8 0 0 0 20 12" stroke="#1F2937" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <!-- Second curved line: starts higher-left, sharp up-right, loops down-left, arrow-like tip center-left -->
+    <path d="M 6 24 Q 10 8, 20 10 Q 26 12, 28 16 Q 26 20, 22 18 Q 18 16, 14 20" 
+          stroke="#F97316" 
+          stroke-width="2.5" 
+          fill="none" 
+          stroke-linecap="round" 
+          stroke-linejoin="round"/>
   </g>
   
   <!-- Text "SalesTrigger" -->
-  <text x="50" y="26" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="700" fill="#1F2937" letter-spacing="-0.5">SalesTrigger</text>
+  <text x="50" y="26" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="700" fill="#1A202C" letter-spacing="-0.5">SalesTrigger</text>
 </svg>
